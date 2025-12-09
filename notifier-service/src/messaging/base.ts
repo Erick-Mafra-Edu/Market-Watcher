@@ -55,14 +55,28 @@ export abstract class BaseMessagingProvider {
 
   /**
    * Convert HTML to plain text
-   * Basic sanitization to prevent HTML injection
+   * Comprehensive sanitization to prevent HTML injection
+   * Used for converting HTML emails to SMS/WhatsApp text format
    */
   protected htmlToText(html: string): string {
-    // First, remove script tags completely
-    let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    // Remove all script and style tags with their content
+    // This handles variations like <script >, <script\n>, etc.
+    let text = html;
+    
+    // Remove script tags (multiple passes to handle nested or malformed tags)
+    while (/<script/i.test(text)) {
+      text = text.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+      text = text.replace(/<script\b[^>]*>/gi, ''); // Remove unclosed tags
+    }
     
     // Remove style tags
-    text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+    while (/<style/i.test(text)) {
+      text = text.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+      text = text.replace(/<style\b[^>]*>/gi, ''); // Remove unclosed tags
+    }
+    
+    // Remove any remaining potentially dangerous tags
+    text = text.replace(/<(iframe|object|embed|link)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
     
     // Convert common HTML elements to text equivalents
     text = text
@@ -80,6 +94,9 @@ export abstract class BaseMessagingProvider {
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/&amp;/g, '&'); // Decode &amp; last to avoid double-decoding
+    
+    // Remove any remaining < or > that might have been missed
+    text = text.replace(/[<>]/g, '');
     
     return text.trim();
   }
