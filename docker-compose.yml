@@ -1,0 +1,184 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: market-watcher-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-market_watcher}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - market-watcher-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: market-watcher-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-admin}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - market-watcher-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # GNews Service (Python) - News scraping
+  gnews-service:
+    build:
+      context: ./gnews-service
+      dockerfile: Dockerfile
+    container_name: market-watcher-gnews
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
+      GNEWS_API_KEY: ${GNEWS_API_KEY}
+      CHECK_INTERVAL: ${GNEWS_CHECK_INTERVAL:-300}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - market-watcher-network
+    restart: unless-stopped
+
+  # API Handler (Node.js/TypeScript) - Yahoo Finance API
+  api-handler:
+    build:
+      context: ./api-handler
+      dockerfile: Dockerfile
+    container_name: market-watcher-api-handler
+    environment:
+      NODE_ENV: production
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-market_watcher}
+      DATABASE_USER: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      CHECK_INTERVAL: ${API_CHECK_INTERVAL:-300}
+    ports:
+      - "3001:3001"
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - market-watcher-network
+    restart: unless-stopped
+
+  # Scraping Worker (Python) - StatusInvest scraping
+  scraping-worker:
+    build:
+      context: ./scraping-worker
+      dockerfile: Dockerfile
+    container_name: market-watcher-scraper
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
+      CHECK_INTERVAL: ${SCRAPER_CHECK_INTERVAL:-300}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - market-watcher-network
+    restart: unless-stopped
+
+  # Notifier Service (Node.js/TypeScript) - Multi-channel alert notifications
+  notifier-service:
+    build:
+      context: ./notifier-service
+      dockerfile: Dockerfile
+    container_name: market-watcher-notifier
+    environment:
+      NODE_ENV: production
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-market_watcher}
+      DATABASE_USER: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # SMTP Configuration
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      # Twilio Configuration
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      # WhatsApp Configuration (utter-labs/wa-bot-api)
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL}
+      WHATSAPP_API_KEY: ${WHATSAPP_API_KEY}
+      WHATSAPP_INSTANCE_ID: ${WHATSAPP_INSTANCE_ID}
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - market-watcher-network
+    restart: unless-stopped
+
+  # Web App (Node.js/TypeScript) - User interface
+  web-app:
+    build:
+      context: ./web-app
+      dockerfile: Dockerfile
+    container_name: market-watcher-web
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-market_watcher}
+      DATABASE_USER: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      API_HANDLER_URL: http://api-handler:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      api-handler:
+        condition: service_started
+    networks:
+      - market-watcher-network
+    restart: unless-stopped
+
+networks:
+  market-watcher-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
