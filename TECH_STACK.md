@@ -91,9 +91,19 @@ const app = express();
 #### yahoo-finance2 (Stock Data)
 ```typescript
 import yahooFinance from 'yahoo-finance2';
-const quote = await yahooFinance.quote('AAPL');
+
+try {
+  const quote = await yahooFinance.quote('AAPL');
+  // Process quote data
+} catch (error) {
+  console.error('Failed to fetch stock quote:', error);
+  // Implement fallback or retry logic
+  // Consider caching last known values
+}
 ```
 - **Why?** Free, reliable, no API key required
+- **Important:** Unofficial API - implement robust error handling and fallback mechanisms
+- **Best Practice:** Cache recent data and implement circuit breaker pattern
 - **Alternatives:** Alpha Vantage (requires key), IEX Cloud (paid), Finnhub (freemium)
 
 #### pg (PostgreSQL Client)

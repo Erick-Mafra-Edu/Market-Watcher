@@ -29,6 +29,8 @@
   curl -fsSL https://get.docker.com -o get-docker.sh
   sudo sh get-docker.sh
   sudo usermod -aG docker $USER
+  # ⚠️ Security Note: Adding user to docker group grants root-equivalent privileges
+  # For production, consider using sudo for docker commands instead
   
   # macOS/Windows
   # Download Docker Desktop from https://www.docker.com/products/docker-desktop
@@ -120,16 +122,22 @@ Open `.env` in your preferred editor and configure:
 ```env
 POSTGRES_DB=market_watcher
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=YourSecurePassword123!
+POSTGRES_PASSWORD=CHANGE_THIS_TO_YOUR_SECURE_PASSWORD
 ```
 
-⚠️ **Security Note:** Use a strong password with uppercase, lowercase, numbers, and special characters.
+⚠️ **Security Warning:** 
+- **NEVER** use example passwords in production
+- Use a strong password with uppercase, lowercase, numbers, and special characters
+- Minimum 16 characters recommended
+- Generate secure passwords using: `openssl rand -base64 24`
 
 ##### RabbitMQ Configuration (Required)
 ```env
 RABBITMQ_USER=admin
-RABBITMQ_PASS=YourRabbitMQPassword456!
+RABBITMQ_PASS=CHANGE_THIS_TO_YOUR_SECURE_PASSWORD
 ```
+
+⚠️ **Security Note:** Do not use example passwords. Generate a secure password.
 
 ##### GNews API Configuration (Required for news)
 ```env
