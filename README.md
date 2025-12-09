@@ -209,7 +209,7 @@ Configure how often services check for updates:
 ```env
 GNEWS_CHECK_INTERVAL=300       # 5 minutes
 API_CHECK_INTERVAL=300         # 5 minutes
-SCRAPPER_CHECK_INTERVAL=300    # 5 minutes
+SCRAPER_CHECK_INTERVAL=300     # 5 minutes
 ```
 
 ### Alert Conditions
@@ -261,7 +261,7 @@ docker-compose exec web-app sh
 
 ### Backend Services
 - **Python**: GNews service, Scraping worker
-  - Libraries: gnews, beautifulsoup4, selenium, pika
+  - Libraries: gnews, beautifulsoup4, requests, pika
 - **Node.js/TypeScript**: API handler, Notifier, Web app
   - Libraries: express, yahoo-finance2, nodemailer, twilio, amqplib
 

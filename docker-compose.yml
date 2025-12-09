@@ -90,14 +90,14 @@ services:
   # Scraping Worker (Python) - StatusInvest scraping
   scraping-worker:
     build:
-      context: ./scrapping-worker
+      context: ./scraping-worker
       dockerfile: Dockerfile
     container_name: market-watcher-scraper
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER:-admin}
       RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
-      CHECK_INTERVAL: ${SCRAPPER_CHECK_INTERVAL:-300}
+      CHECK_INTERVAL: ${SCRAPER_CHECK_INTERVAL:-300}
     depends_on:
       rabbitmq:
         condition: service_healthy
