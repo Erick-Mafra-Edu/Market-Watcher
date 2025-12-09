@@ -54,22 +54,34 @@ export abstract class BaseMessagingProvider {
   abstract supportsFormat(format: MessageFormat): boolean;
 
   /**
-   * Convert HTML to plain text if needed
+   * Convert HTML to plain text
+   * Basic sanitization to prevent HTML injection
    */
   protected htmlToText(html: string): string {
-    // Basic HTML to text conversion
-    return html
+    // First, remove script tags completely
+    let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Remove style tags
+    text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+    
+    // Convert common HTML elements to text equivalents
+    text = text
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/p>/gi, '\n\n')
       .replace(/<\/div>/gi, '\n')
       .replace(/<\/h[1-6]>/gi, '\n\n')
-      .replace(/<[^>]+>/g, '')
+      .replace(/<[^>]+>/g, ''); // Remove all remaining tags
+    
+    // Decode HTML entities in safe order
+    text = text
       .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .trim();
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&'); // Decode &amp; last to avoid double-decoding
+    
+    return text.trim();
   }
 
   /**

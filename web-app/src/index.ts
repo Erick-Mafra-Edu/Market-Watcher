@@ -3,6 +3,7 @@
  * User registration, authentication, and watchlist management
  */
 import express, { Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { Pool } from 'pg';
 import axios from 'axios';
 import { AuthController } from './controllers/auth.controller';
@@ -26,6 +27,23 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.static('public'));
 
+// Rate limiting
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs for auth endpoints
+  message: 'Too many authentication attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs for API endpoints
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Initialize controllers
 const authController = new AuthController(pool);
 const watchlistController = new WatchlistController(pool);
@@ -36,33 +54,33 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'web-app' });
 });
 
-// Authentication routes
-app.post('/api/auth/register', (req, res) => authController.register(req, res));
-app.post('/api/auth/login', (req, res) => authController.login(req, res));
+// Authentication routes (rate limited)
+app.post('/api/auth/register', authLimiter, (req, res) => authController.register(req, res));
+app.post('/api/auth/login', authLimiter, (req, res) => authController.login(req, res));
 
-// Watchlist routes (protected)
-app.get('/api/watchlist', authMiddleware, (req, res) =>
+// Watchlist routes (protected and rate limited)
+app.get('/api/watchlist', authMiddleware, apiLimiter, (req, res) =>
   watchlistController.getWatchlist(req, res)
 );
-app.post('/api/watchlist', authMiddleware, (req, res) =>
+app.post('/api/watchlist', authMiddleware, apiLimiter, (req, res) =>
   watchlistController.addToWatchlist(req, res)
 );
-app.delete('/api/watchlist/:symbol', authMiddleware, (req, res) =>
+app.delete('/api/watchlist/:symbol', authMiddleware, apiLimiter, (req, res) =>
   watchlistController.removeFromWatchlist(req, res)
 );
 
-// Alerts routes (protected)
-app.get('/api/alerts', authMiddleware, (req, res) =>
+// Alerts routes (protected and rate limited)
+app.get('/api/alerts', authMiddleware, apiLimiter, (req, res) =>
   alertsController.getAlerts(req, res)
 );
-app.patch('/api/alerts/:alertId/read', authMiddleware, (req, res) =>
+app.patch('/api/alerts/:alertId/read', authMiddleware, apiLimiter, (req, res) =>
   alertsController.markAsRead(req, res)
 );
 
-// Stock data proxy (to api-handler)
+// Stock data proxy (to api-handler) - protected and rate limited
 const API_HANDLER_URL = process.env.API_HANDLER_URL || 'http://api-handler:3001';
 
-app.get('/api/stocks/:symbol', authMiddleware, async (req: Request, res: Response) => {
+app.get('/api/stocks/:symbol', authMiddleware, apiLimiter, async (req: Request, res: Response) => {
   try {
     const { symbol } = req.params;
     const response = await axios.get(`${API_HANDLER_URL}/api/stock/${symbol}`);
@@ -75,7 +93,7 @@ app.get('/api/stocks/:symbol', authMiddleware, async (req: Request, res: Respons
   }
 });
 
-app.get('/api/stocks/:symbol/history', authMiddleware, async (req: Request, res: Response) => {
+app.get('/api/stocks/:symbol/history', authMiddleware, apiLimiter, async (req: Request, res: Response) => {
   try {
     const { symbol } = req.params;
     const { period1, period2 } = req.query;
