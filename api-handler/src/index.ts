@@ -12,6 +12,7 @@ const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
 const RABBITMQ_USER = process.env.RABBITMQ_USER || 'admin';
 const RABBITMQ_PASS = process.env.RABBITMQ_PASS || 'admin';
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '300') * 1000;
+const API_REQUEST_DELAY = parseInt(process.env.API_REQUEST_DELAY || '1000');
 const PORT = 3001;
 
 // Database connection
@@ -209,8 +210,8 @@ class ApiHandler {
             // Publish to RabbitMQ
             await this.publishStockData(stockData);
 
-            // Small delay between API calls
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Delay between API calls to respect rate limits
+            await new Promise(resolve => setTimeout(resolve, API_REQUEST_DELAY));
           } catch (error) {
             console.error(`Error processing ${symbol}:`, error);
           }

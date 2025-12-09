@@ -80,9 +80,12 @@ export class WatchlistController {
         [userId, symbol.toUpperCase()]
       );
 
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Stock not in watchlist' });
-        return;
+      if (!result.rows || result.rows.length === 0) {
+        // Check if it was actually deleted using rowCount
+        if (result.rowCount === 0) {
+          res.status(404).json({ error: 'Stock not in watchlist' });
+          return;
+        }
       }
 
       res.json({ message: 'Removed from watchlist successfully' });

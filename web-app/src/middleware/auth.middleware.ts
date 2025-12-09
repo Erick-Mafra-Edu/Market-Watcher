@@ -29,6 +29,10 @@ export const authMiddleware = (
   next: NextFunction
 ): void => {
   try {
+    if (!JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+    
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

@@ -139,6 +139,9 @@ class StatusInvestScraper:
         """
         try:
             # MOCK DATA - Replace with actual HTML parsing
+            # TODO: Implement real StatusInvest HTML parsing
+            logger.warning(f'Using mock data for {indicator_name} - implement actual HTML parsing for production')
+            
             mock_data = {
                 'dividend-yield': 5.5,
                 'p-vp': 2.3,

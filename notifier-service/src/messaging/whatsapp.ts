@@ -92,10 +92,11 @@ export class WhatsAppProvider extends BaseMessagingProvider {
   /**
    * Format phone number for WhatsApp
    * Remove spaces, dashes, and ensure country code format
+   * Pattern removes all characters except digits (0-9) and plus sign (+)
    */
   private formatWhatsAppNumber(phone: string): string {
     // Remove all non-numeric characters except +
-    let formatted = phone.replace(/[^\d+]/g, '');
+    let formatted = phone.replace(/[^0-9+]/g, '');
     
     // Ensure it has + prefix for country code
     if (!formatted.startsWith('+')) {

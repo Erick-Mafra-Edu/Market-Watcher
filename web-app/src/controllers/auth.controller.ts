@@ -20,6 +20,10 @@ export class AuthController {
 
   async register(req: Request, res: Response): Promise<void> {
     try {
+      if (!JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
+      
       const { email, password, name, phone, whatsapp } = req.body;
 
       if (!email || !password) {
@@ -67,6 +71,10 @@ export class AuthController {
 
   async login(req: Request, res: Response): Promise<void> {
     try {
+      if (!JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
+      
       const { email, password } = req.body;
 
       if (!email || !password) {
