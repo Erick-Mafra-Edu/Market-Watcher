@@ -6,7 +6,14 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Pool } from 'pg';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET || JWT_SECRET === 'change-me-in-production') {
+  console.error('CRITICAL: JWT_SECRET must be set to a secure value in production!');
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET not configured for production');
+  }
+}
 
 export class AuthController {
   constructor(private pool: Pool) {}

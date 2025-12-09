@@ -120,11 +120,25 @@ class StatusInvestScraper:
             return None
     
     def _extract_indicator(self, soup: BeautifulSoup, indicator_name: str) -> Optional[float]:
-        """Extract a specific indicator from the page"""
+        """Extract a specific indicator from the page
+        
+        NOTE: This is currently a MOCK implementation for demonstration purposes.
+        In production, this should parse actual HTML elements from StatusInvest.
+        
+        To implement properly:
+        1. Inspect StatusInvest page HTML structure
+        2. Find the correct CSS selectors or element IDs
+        3. Parse and convert values to float
+        4. Handle missing or invalid data gracefully
+        
+        Example real implementation:
+            element = soup.find('div', {'title': indicator_name})
+            if element:
+                value_text = element.find('strong').text.strip()
+                return float(value_text.replace(',', '.').replace('%', ''))
+        """
         try:
-            # This is a mock implementation
-            # Real implementation would parse actual HTML elements
-            # For now, return mock data for demonstration
+            # MOCK DATA - Replace with actual HTML parsing
             mock_data = {
                 'dividend-yield': 5.5,
                 'p-vp': 2.3,

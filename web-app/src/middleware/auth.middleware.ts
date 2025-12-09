@@ -4,7 +4,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET || JWT_SECRET === 'change-me-in-production') {
+  console.error('CRITICAL: JWT_SECRET must be set to a secure value in production!');
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET not configured for production');
+  }
+}
 
 export interface AuthRequest extends Request {
   userId?: number;

@@ -64,7 +64,7 @@ market-watcher-db              Up        0.0.0.0:5432->5432/tcp
 market-watcher-gnews           Up        
 market-watcher-notifier        Up        
 market-watcher-rabbitmq        Up        0.0.0.0:5672->5672/tcp, 0.0.0.0:15672->15672/tcp
-market-watcher-scrapper        Up        
+market-watcher-scraper         Up        
 market-watcher-web             Up        0.0.0.0:3000->3000/tcp
 ```
 

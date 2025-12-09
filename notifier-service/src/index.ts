@@ -261,11 +261,23 @@ class NotifierService {
         if (result.success) {
           console.log(`Alert sent via ${result.provider}: ${result.messageId}`);
           
-          // Save to database
-          await pool.query(
-            'INSERT INTO alerts (user_id, stock_id, alert_type, title, message, sent_at) VALUES ($1, (SELECT id FROM stocks WHERE symbol = $2), $3, $4, $5, CURRENT_TIMESTAMP)',
-            [user.id, stockData.symbol, result.provider, htmlMessage.subject, textContent]
-          );
+          // Get stock_id first, then save alert
+          try {
+            const stockResult = await pool.query(
+              'SELECT id FROM stocks WHERE symbol = $1',
+              [stockData.symbol]
+            );
+            
+            if (stockResult.rows.length > 0) {
+              const stockId = stockResult.rows[0].id;
+              await pool.query(
+                'INSERT INTO alerts (user_id, stock_id, alert_type, title, message, sent_at) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)',
+                [user.id, stockId, result.provider, htmlMessage.subject, textContent]
+              );
+            }
+          } catch (dbError) {
+            console.error('Error saving alert to database:', dbError);
+          }
         } else {
           console.error(`Failed to send via ${result.provider}: ${result.error}`);
         }

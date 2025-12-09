@@ -64,7 +64,7 @@
 ### 1. Data Collection
 - **GNews Service**: Polls GNews API every 5 minutes for market news
 - **API Handler**: Monitors Yahoo Finance for stock prices
-- **Scrapping Worker**: Scrapes StatusInvest for fundamental data
+- **Scraping Worker**: Scrapes StatusInvest for fundamental data
 
 ### 2. Data Processing
 - All services publish data to RabbitMQ exchanges
