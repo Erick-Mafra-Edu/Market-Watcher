@@ -63,24 +63,40 @@ export class PortfolioController {
 
       const result = await this.pool.query(query, [userId]);
 
-      const positions = result.rows.map(row => ({
-        symbol: row.symbol,
-        name: row.name,
-        quantity: parseFloat(row.total_quantity),
-        avgPurchasePrice: parseFloat(row.avg_purchase_price) || 0,
-        currentPrice: parseFloat(row.current_price) || 0,
-        dailyChange: parseFloat(row.daily_change) || 0,
-        currentValue: parseFloat(row.current_value) || 0,
-        investedValue: parseFloat(row.invested_value) || 0,
-        profitLoss: (parseFloat(row.current_value) || 0) - (parseFloat(row.invested_value) || 0),
-        profitLossPercent: ((((parseFloat(row.current_value) || 0) - (parseFloat(row.invested_value) || 0)) / (parseFloat(row.invested_value) || 1)) * 100).toFixed(2),
-        dividendYield: parseFloat(row.dividend_yield) || 0,
-        firstPurchaseDate: row.first_purchase_date,
-      }));
+      const positions = result.rows.map(row => {
+        const currentValue = parseFloat(row.current_value) || 0;
+        const investedValue = parseFloat(row.invested_value) || 0;
+        const profitLoss = currentValue - investedValue;
+        
+        // Calculate profit/loss percentage
+        const profitLossPercent = investedValue > 0
+          ? ((profitLoss / investedValue) * 100).toFixed(2)
+          : '0.00';
+
+        return {
+          symbol: row.symbol,
+          name: row.name,
+          quantity: parseFloat(row.total_quantity),
+          avgPurchasePrice: parseFloat(row.avg_purchase_price) || 0,
+          currentPrice: parseFloat(row.current_price) || 0,
+          dailyChange: parseFloat(row.daily_change) || 0,
+          currentValue,
+          investedValue,
+          profitLoss,
+          profitLossPercent,
+          dividendYield: parseFloat(row.dividend_yield) || 0,
+          firstPurchaseDate: row.first_purchase_date,
+        };
+      });
 
       const totalInvested = positions.reduce((sum, p) => sum + p.investedValue, 0);
       const totalCurrent = positions.reduce((sum, p) => sum + p.currentValue, 0);
       const totalProfitLoss = totalCurrent - totalInvested;
+      
+      // Calculate total return percentage
+      const totalProfitLossPercent = totalInvested > 0
+        ? ((totalProfitLoss / totalInvested) * 100).toFixed(2)
+        : '0.00';
 
       res.json({
         success: true,
@@ -90,7 +106,7 @@ export class PortfolioController {
             totalInvested,
             totalCurrent,
             totalProfitLoss,
-            totalProfitLossPercent: ((totalProfitLoss / (totalInvested || 1)) * 100).toFixed(2),
+            totalProfitLossPercent,
             positionsCount: positions.length,
           },
         },
