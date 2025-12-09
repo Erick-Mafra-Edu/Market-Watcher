@@ -1,5 +1,5 @@
 """
-Scrapping Worker - StatusInvest web scraping service
+Scraping Worker - StatusInvest web scraping service
 Scrapes fundamental data from StatusInvest and publishes to RabbitMQ
 """
 import os
@@ -158,7 +158,7 @@ class StatusInvestScraper:
     
     def run(self):
         """Main service loop"""
-        logger.info("Scrapping Worker started")
+        logger.info("Scraping Worker started")
         logger.info(f"Monitoring {len(BRAZILIAN_STOCKS)} Brazilian stocks")
         logger.info(f"Check interval: {CHECK_INTERVAL} seconds")
         
@@ -177,7 +177,7 @@ class StatusInvestScraper:
                 time.sleep(CHECK_INTERVAL)
                 
             except KeyboardInterrupt:
-                logger.info("Shutting down Scrapping Worker...")
+                logger.info("Shutting down Scraping Worker...")
                 break
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")

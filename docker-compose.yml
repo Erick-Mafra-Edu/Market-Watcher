@@ -87,12 +87,12 @@ services:
       - market-watcher-network
     restart: unless-stopped
 
-  # Scrapping Worker (Python) - StatusInvest scraping
-  scrapping-worker:
+  # Scraping Worker (Python) - StatusInvest scraping
+  scraping-worker:
     build:
       context: ./scrapping-worker
       dockerfile: Dockerfile
-    container_name: market-watcher-scrapper
+    container_name: market-watcher-scraper
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER:-admin}

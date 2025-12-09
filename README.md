@@ -23,7 +23,7 @@ Market Watcher monitors real-time market data from multiple sources and sends in
    - Provides REST API for stock information
    - Stores data in PostgreSQL
 
-3. **Scrapping Worker** (Python)
+3. **Scraping Worker** (Python)
    - Scrapes fundamental data from StatusInvest
    - Monitors Brazilian stocks (PETR4, VALE3, ITUB4, etc.)
    - Publishes fundamental data to message queue
@@ -260,7 +260,7 @@ docker-compose exec web-app sh
 ## 📦 Tech Stack
 
 ### Backend Services
-- **Python**: GNews service, Scrapping worker
+- **Python**: GNews service, Scraping worker
   - Libraries: gnews, beautifulsoup4, selenium, pika
 - **Node.js/TypeScript**: API handler, Notifier, Web app
   - Libraries: express, yahoo-finance2, nodemailer, twilio, amqplib

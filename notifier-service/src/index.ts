@@ -263,7 +263,7 @@ class NotifierService {
           
           // Save to database
           await pool.query(
-            'INSERT INTO alerts (user_id, stock_id, alert_type, title, message, sent_at) VALUES ((SELECT id FROM stocks WHERE symbol = $2), $1, $3, $4, $5, CURRENT_TIMESTAMP)',
+            'INSERT INTO alerts (user_id, stock_id, alert_type, title, message, sent_at) VALUES ($1, (SELECT id FROM stocks WHERE symbol = $2), $3, $4, $5, CURRENT_TIMESTAMP)',
             [user.id, stockData.symbol, result.provider, htmlMessage.subject, textContent]
           );
         } else {

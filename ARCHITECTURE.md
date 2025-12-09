@@ -14,7 +14,7 @@
        │                        │                        │
        ▼                        ▼                        ▼
 ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│ gnews-service│         │ api-handler  │         │scrapping-    │
+│ gnews-service│         │ api-handler  │         │scraping-     │
 │   (Python)   │         │  (Node.js)   │         │worker (Py)   │
 └──────┬───────┘         └──────┬───────┘         └──────┬───────┘
        │                        │                        │
