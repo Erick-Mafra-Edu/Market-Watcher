@@ -89,6 +89,31 @@ CREATE TABLE IF NOT EXISTS status_invest_data (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User portfolio (stock purchases/transactions)
+CREATE TABLE IF NOT EXISTS user_portfolio (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    stock_id INTEGER REFERENCES stocks(id) ON DELETE CASCADE,
+    quantity DECIMAL(15, 4) NOT NULL,
+    purchase_price DECIMAL(15, 2) NOT NULL,
+    purchase_date TIMESTAMP NOT NULL,
+    transaction_type VARCHAR(10) DEFAULT 'BUY', -- BUY or SELL
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Dividend history
+CREATE TABLE IF NOT EXISTS dividend_history (
+    id SERIAL PRIMARY KEY,
+    stock_id INTEGER REFERENCES stocks(id) ON DELETE CASCADE,
+    dividend_amount DECIMAL(15, 4) NOT NULL,
+    ex_date DATE NOT NULL,
+    payment_date DATE,
+    dividend_type VARCHAR(50), -- Regular, Special, etc.
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(stock_id, ex_date)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_user_watchlist_user_id ON user_watchlist(user_id);
 CREATE INDEX IF NOT EXISTS idx_stock_news_stock_id ON stock_news(stock_id);
@@ -97,6 +122,9 @@ CREATE INDEX IF NOT EXISTS idx_stock_prices_stock_id ON stock_prices(stock_id);
 CREATE INDEX IF NOT EXISTS idx_stock_prices_recorded_at ON stock_prices(recorded_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id);
 CREATE INDEX IF NOT EXISTS idx_news_articles_published_at ON news_articles(published_at);
+CREATE INDEX IF NOT EXISTS idx_user_portfolio_user_id ON user_portfolio(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_portfolio_stock_id ON user_portfolio(stock_id);
+CREATE INDEX IF NOT EXISTS idx_dividend_history_stock_id ON dividend_history(stock_id);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

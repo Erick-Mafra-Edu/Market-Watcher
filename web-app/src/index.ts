@@ -9,6 +9,8 @@ import axios from 'axios';
 import { AuthController } from './controllers/auth.controller';
 import { WatchlistController } from './controllers/watchlist.controller';
 import { AlertsController } from './controllers/alerts.controller';
+import { NewsController } from './controllers/news.controller';
+import { PortfolioController } from './controllers/portfolio.controller';
 import { authMiddleware } from './middleware/auth.middleware';
 
 const app = express();
@@ -48,6 +50,8 @@ const apiLimiter = rateLimit({
 const authController = new AuthController(pool);
 const watchlistController = new WatchlistController(pool);
 const alertsController = new AlertsController(pool);
+const newsController = new NewsController(pool);
+const portfolioController = new PortfolioController(pool);
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
@@ -75,6 +79,31 @@ app.get('/api/alerts', authMiddleware, apiLimiter, (req, res) =>
 );
 app.patch('/api/alerts/:alertId/read', authMiddleware, apiLimiter, (req, res) =>
   alertsController.markAsRead(req, res)
+);
+
+// News routes (protected and rate limited)
+app.get('/api/news', authMiddleware, apiLimiter, (req, res) =>
+  newsController.getNews(req, res)
+);
+app.get('/api/news/stats', authMiddleware, apiLimiter, (req, res) =>
+  newsController.getSentimentStats(req, res)
+);
+app.get('/api/news/stock/:symbol', authMiddleware, apiLimiter, (req, res) =>
+  newsController.getStockNews(req, res)
+);
+
+// Portfolio routes (protected and rate limited)
+app.get('/api/portfolio', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.getPortfolio(req, res)
+);
+app.post('/api/portfolio/transaction', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.addTransaction(req, res)
+);
+app.get('/api/portfolio/transactions', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.getTransactions(req, res)
+);
+app.get('/api/portfolio/dividends', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.getDividends(req, res)
 );
 
 // Stock data proxy (to api-handler) - protected and rate limited

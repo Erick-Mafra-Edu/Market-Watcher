@@ -13,6 +13,7 @@ import {
   MessageFormat,
   MessageRecipient,
 } from './messaging';
+import { SentimentAnalyzer } from './sentiment.service';
 
 // Configuration
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
@@ -50,11 +51,13 @@ class NotifierService {
   private connection: Connection | null = null;
   private channel: Channel | null = null;
   private messagingManager: MessagingManager;
+  private sentimentAnalyzer: SentimentAnalyzer;
   private newsCache: Map<string, NewsData[]> = new Map();
   private stockCache: Map<string, StockData> = new Map();
 
   constructor() {
     this.messagingManager = new MessagingManager();
+    this.sentimentAnalyzer = new SentimentAnalyzer();
     this.setupMessagingProviders();
   }
 
@@ -158,6 +161,23 @@ class NotifierService {
 
   async handleNews(newsData: NewsData): Promise<void> {
     console.log(`Processing news: ${newsData.title}`);
+
+    // Analyze sentiment
+    const sentiment = this.sentimentAnalyzer.analyzeNews(newsData.title, newsData.description);
+    console.log(`Sentiment analysis: ${sentiment.label} (score: ${sentiment.score}, confidence: ${sentiment.confidence})`);
+
+    // Save news to database with sentiment
+    try {
+      await pool.query(
+        `INSERT INTO news_articles (title, description, url, source, published_at, sentiment_score)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (url) DO UPDATE 
+         SET sentiment_score = EXCLUDED.sentiment_score`,
+        [newsData.title, newsData.description, newsData.url, newsData.source, newsData.published_at, sentiment.score]
+      );
+    } catch (error) {
+      console.error('Error saving news to database:', error);
+    }
 
     // Store news in cache by topic
     if (!this.newsCache.has(newsData.topic)) {
