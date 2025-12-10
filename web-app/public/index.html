@@ -3,7 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Watcher - Investment Alert System</title>
+    <title>Market Watcher - Investment Dashboard</title>
+    
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
     <style>
         * {
             margin: 0;
@@ -11,156 +18,377 @@
             box-sizing: border-box;
         }
         
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #3b82f6;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+        }
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
         }
         
         .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .card {
             background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            max-width: 1200px;
-            width: 100%;
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .content {
-            padding: 30px;
-        }
-        
-        .auth-section, .dashboard-section {
-            display: none;
-        }
-        
-        .auth-section.active, .dashboard-section.active {
-            display: block;
-        }
-        
-        .form-group {
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 24px;
             margin-bottom: 20px;
         }
         
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #333;
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border);
         }
         
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
-        .btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-            margin-left: 10px;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .watchlist-item {
-            background: #f8f9fa;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
+        .header {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
-        .alert-item {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-        }
-        
-        .alert-item.unread {
-            background: #d1ecf1;
-            border-left-color: #17a2b8;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-        }
-        
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-        }
-        
-        .tabs {
+        .header-logo {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #ddd;
+            align-items: center;
+            gap: 12px;
         }
         
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
+        .header-logo h1 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            background: var(--light);
+            padding: 8px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        
+        .nav-tab {
+            padding: 12px 24px;
             border: none;
-            background: none;
-            font-size: 16px;
-            color: #666;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #6b7280;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
-        .tab.active {
-            color: #667eea;
-            border-bottom: 3px solid #667eea;
+        .nav-tab:hover {
+            background: white;
+            color: var(--primary-color);
+        }
+        
+        .nav-tab.active {
+            background: white;
+            color: var(--primary-color);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        
+        .grid {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+        
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+        
+        .grid-4 {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .stat-card-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+        
+        .stat-card-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .stat-card-icon {
+            margin-left: auto;
+            opacity: 0.8;
+        }
+        
+        .news-item {
+            padding: 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .news-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .news-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
+        }
+        
+        .news-title {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+        
+        .news-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 0.875rem;
+            color: #6b7280;
+            align-items: center;
+        }
+        
+        .sentiment-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .sentiment-positive {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .sentiment-negative {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .sentiment-neutral {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        .stock-item {
+            padding: 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .stock-symbol {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        
+        .stock-price {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .price-change {
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .price-up {
+            color: var(--success-color);
+        }
+        
+        .price-down {
+            color: var(--danger-color);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+        }
+        
+        .auth-section, .app-section {
+            display: none;
+        }
+        
+        .auth-section.active, .app-section.active {
+            display: block;
         }
         
         .tab-content {
@@ -170,40 +398,142 @@
         .tab-content.active {
             display: block;
         }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid var(--success-color);
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid var(--danger-color);
+        }
+        
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid var(--info-color);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+        
+        .empty-state-icon {
+            margin: 0 auto 16px;
+            opacity: 0.5;
+        }
+        
+        .portfolio-position {
+            padding: 20px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .position-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+        
+        .position-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        
+        .position-stat {
+            text-align: center;
+        }
+        
+        .position-stat-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .position-stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        @media (max-width: 768px) {
+            .grid-2, .grid-3, .grid-4 {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 16px;
+            }
+            
+            .nav-tabs {
+                flex-wrap: wrap;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📊 Market Watcher</h1>
-            <p>Stay informed with real-time market alerts</p>
-        </div>
-        
-        <div class="content">
-            <!-- Authentication Section -->
-            <div class="auth-section active" id="authSection">
-                <h2>Welcome!</h2>
-                <p style="margin: 20px 0;">Sign in or create an account to start watching the market.</p>
+        <!-- Authentication Section -->
+        <div class="auth-section active" id="authSection">
+            <div class="card" style="max-width: 500px; margin: 40px auto;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-lucide="trending-up"></i>
+                        Market Watcher
+                    </h2>
+                </div>
                 
                 <div id="authMessage"></div>
                 
-                <div class="tabs">
-                    <button class="tab active" onclick="switchAuthTab('login')">Login</button>
-                    <button class="tab" onclick="switchAuthTab('register')">Register</button>
+                <div class="nav-tabs">
+                    <button class="nav-tab active" onclick="switchAuthTab('login')">
+                        <i data-lucide="log-in"></i>
+                        Login
+                    </button>
+                    <button class="nav-tab" onclick="switchAuthTab('register')">
+                        <i data-lucide="user-plus"></i>
+                        Register
+                    </button>
                 </div>
                 
                 <!-- Login Form -->
                 <div class="tab-content active" id="loginTab">
                     <form onsubmit="login(event)">
                         <div class="form-group">
-                            <label>Email</label>
-                            <input type="email" id="loginEmail" required>
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="loginEmail" required>
                         </div>
                         <div class="form-group">
-                            <label>Password</label>
-                            <input type="password" id="loginPassword" required>
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" id="loginPassword" required>
                         </div>
-                        <button type="submit" class="btn btn-primary">Login</button>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <i data-lucide="log-in"></i>
+                            Login
+                        </button>
                     </form>
                 </div>
                 
@@ -211,309 +541,884 @@
                 <div class="tab-content" id="registerTab">
                     <form onsubmit="register(event)">
                         <div class="form-group">
-                            <label>Name</label>
-                            <input type="text" id="registerName">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-input" id="registerName">
                         </div>
                         <div class="form-group">
-                            <label>Email</label>
-                            <input type="email" id="registerEmail" required>
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="registerEmail" required>
                         </div>
                         <div class="form-group">
-                            <label>Password</label>
-                            <input type="password" id="registerPassword" required>
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" id="registerPassword" required>
                         </div>
-                        <div class="form-group">
-                            <label>Phone (optional)</label>
-                            <input type="tel" id="registerPhone" placeholder="+1234567890">
-                        </div>
-                        <div class="form-group">
-                            <label>WhatsApp (optional)</label>
-                            <input type="tel" id="registerWhatsapp" placeholder="+1234567890">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Register</button>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <i data-lucide="user-plus"></i>
+                            Register
+                        </button>
                     </form>
                 </div>
             </div>
+        </div>
+        
+        <!-- Main Application Section -->
+        <div class="app-section" id="appSection">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-logo">
+                    <i data-lucide="trending-up" style="width: 40px; height: 40px; color: var(--primary-color);"></i>
+                    <div>
+                        <h1>Market Watcher</h1>
+                        <p style="color: #6b7280; font-size: 0.875rem;">Investment Dashboard</p>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="logout()">
+                    <i data-lucide="log-out"></i>
+                    Logout
+                </button>
+            </div>
             
-            <!-- Dashboard Section -->
-            <div class="dashboard-section" id="dashboardSection">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>Dashboard</h2>
-                    <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            <!-- Navigation -->
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="switchTab('dashboard')">
+                    <i data-lucide="layout-dashboard"></i>
+                    Dashboard
+                </button>
+                <button class="nav-tab" onclick="switchTab('news')">
+                    <i data-lucide="newspaper"></i>
+                    News
+                </button>
+                <button class="nav-tab" onclick="switchTab('portfolio')">
+                    <i data-lucide="briefcase"></i>
+                    Portfolio
+                </button>
+                <button class="nav-tab" onclick="switchTab('watchlist')">
+                    <i data-lucide="eye"></i>
+                    Watchlist
+                </button>
+                <button class="nav-tab" onclick="switchTab('alerts')">
+                    <i data-lucide="bell"></i>
+                    Alerts
+                </button>
+            </div>
+            
+            <div id="appMessage"></div>
+            
+            <!-- Dashboard Tab -->
+            <div class="tab-content active" id="dashboardTab">
+                <div class="grid grid-4">
+                    <div class="stat-card">
+                        <div class="stat-card-label">Portfolio Value</div>
+                        <div class="stat-card-value" id="dashTotalValue">$0</div>
+                        <i data-lucide="trending-up" class="stat-card-icon" style="width: 32px; height: 32px;"></i>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #10b981, #059669);">
+                        <div class="stat-card-label">Total Profit/Loss</div>
+                        <div class="stat-card-value" id="dashProfitLoss">$0</div>
+                        <i data-lucide="dollar-sign" class="stat-card-icon" style="width: 32px; height: 32px;"></i>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                        <div class="stat-card-label">Watchlist Stocks</div>
+                        <div class="stat-card-value" id="dashWatchlistCount">0</div>
+                        <i data-lucide="eye" class="stat-card-icon" style="width: 32px; height: 32px;"></i>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                        <div class="stat-card-label">Unread Alerts</div>
+                        <div class="stat-card-value" id="dashAlertsCount">0</div>
+                        <i data-lucide="bell" class="stat-card-icon" style="width: 32px; height: 32px;"></i>
+                    </div>
                 </div>
                 
-                <div id="dashboardMessage"></div>
-                
-                <div class="tabs">
-                    <button class="tab active" onclick="switchDashboardTab('watchlist')">Watchlist</button>
-                    <button class="tab" onclick="switchDashboardTab('alerts')">Alerts</button>
+                <div class="grid grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i data-lucide="newspaper"></i>
+                                Latest News
+                            </h3>
+                        </div>
+                        <div id="dashboardNewsContainer"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i data-lucide="trending-up"></i>
+                                Top Movers
+                            </h3>
+                        </div>
+                        <div id="dashboardMoversContainer"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- News Tab -->
+            <div class="tab-content" id="newsTab">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i data-lucide="newspaper"></i>
+                            Market News
+                        </h2>
+                        <button class="btn btn-primary" onclick="loadNews()">
+                            <i data-lucide="refresh-cw"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <!-- Sentiment Stats -->
+                    <div class="grid grid-3" style="margin-bottom: 24px;">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <div class="stat-card-label">Positive News</div>
+                            <div class="stat-card-value" id="positiveCount">0</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #6b7280, #4b5563);">
+                            <div class="stat-card-label">Neutral News</div>
+                            <div class="stat-card-value" id="neutralCount">0</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                            <div class="stat-card-label">Negative News</div>
+                            <div class="stat-card-value" id="negativeCount">0</div>
+                        </div>
+                    </div>
+                    
+                    <!-- News Filter -->
+                    <div style="margin-bottom: 20px; display: flex; gap: 12px;">
+                        <select class="form-input" id="sentimentFilter" onchange="loadNews()" style="max-width: 200px;">
+                            <option value="">All Sentiment</option>
+                            <option value="positive">Positive</option>
+                            <option value="neutral">Neutral</option>
+                            <option value="negative">Negative</option>
+                        </select>
+                    </div>
+                    
+                    <div id="newsContainer"></div>
+                </div>
+            </div>
+            
+            <!-- Portfolio Tab -->
+            <div class="tab-content" id="portfolioTab">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i data-lucide="briefcase"></i>
+                            My Portfolio
+                        </h2>
+                        <button class="btn btn-primary" onclick="showAddTransactionModal()">
+                            <i data-lucide="plus"></i>
+                            Add Transaction
+                        </button>
+                    </div>
+                    
+                    <!-- Portfolio Summary -->
+                    <div class="grid grid-4" style="margin-bottom: 24px;">
+                        <div class="stat-card">
+                            <div class="stat-card-label">Total Invested</div>
+                            <div class="stat-card-value" id="portfolioInvested">$0</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <div class="stat-card-label">Current Value</div>
+                            <div class="stat-card-value" id="portfolioValue">$0</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                            <div class="stat-card-label">Total P/L</div>
+                            <div class="stat-card-value" id="portfolioPL">$0</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <div class="stat-card-label">Return %</div>
+                            <div class="stat-card-value" id="portfolioReturn">0%</div>
+                        </div>
+                    </div>
+                    
+                    <div id="portfolioContainer"></div>
                 </div>
                 
-                <!-- Watchlist Tab -->
-                <div class="tab-content active" id="watchlistTab">
-                    <h3>Your Watchlist</h3>
-                    <form onsubmit="addToWatchlist(event)" style="margin: 20px 0;">
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" id="stockSymbol" placeholder="Stock Symbol (e.g., AAPL)" required style="flex: 1; padding: 10px;">
-                            <input type="number" id="minPriceChange" placeholder="Min % Change" value="5" step="0.1" style="width: 150px; padding: 10px;">
-                            <button type="submit" class="btn btn-primary">Add Stock</button>
+                <!-- Dividends Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i data-lucide="coins"></i>
+                            Dividend History
+                        </h3>
+                    </div>
+                    <div id="dividendsContainer"></div>
+                </div>
+            </div>
+            
+            <!-- Watchlist Tab -->
+            <div class="tab-content" id="watchlistTab">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i data-lucide="eye"></i>
+                            Watchlist
+                        </h2>
+                    </div>
+                    
+                    <form onsubmit="addToWatchlist(event)" style="margin-bottom: 24px;">
+                        <div class="grid grid-3">
+                            <div class="form-group">
+                                <input type="text" class="form-input" id="stockSymbol" placeholder="Stock Symbol (e.g., AAPL)" required>
+                            </div>
+                            <div class="form-group">
+                                <input type="number" class="form-input" id="minPriceChange" placeholder="Min % Change" value="5" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                    <i data-lucide="plus"></i>
+                                    Add Stock
+                                </button>
+                            </div>
                         </div>
                     </form>
+                    
                     <div id="watchlistContainer"></div>
                 </div>
-                
-                <!-- Alerts Tab -->
-                <div class="tab-content" id="alertsTab">
-                    <h3>Your Alerts</h3>
+            </div>
+            
+            <!-- Alerts Tab -->
+            <div class="tab-content" id="alertsTab">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i data-lucide="bell"></i>
+                            Alerts
+                        </h2>
+                        <button class="btn btn-primary" onclick="loadAlerts()">
+                            <i data-lucide="refresh-cw"></i>
+                            Refresh
+                        </button>
+                    </div>
                     <div id="alertsContainer"></div>
                 </div>
             </div>
         </div>
     </div>
     
+    <!-- Add Transaction Modal -->
+    <div class="modal" id="addTransactionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Transaction</h3>
+                <button class="modal-close" onclick="closeModal('addTransactionModal')">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form onsubmit="addTransaction(event)">
+                <div class="form-group">
+                    <label class="form-label">Stock Symbol</label>
+                    <input type="text" class="form-input" id="transactionSymbol" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <select class="form-input" id="transactionType">
+                        <option value="BUY">Buy</option>
+                        <option value="SELL">Sell</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" class="form-input" id="transactionQuantity" step="0.0001" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Price per Share</label>
+                    <input type="number" class="form-input" id="transactionPrice" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-input" id="transactionDate" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes (optional)</label>
+                    <textarea class="form-input" id="transactionNotes" rows="3"></textarea>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">
+                        <i data-lucide="check"></i>
+                        Add Transaction
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addTransactionModal')">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+        
         let token = localStorage.getItem('token');
         let currentUser = null;
+        let charts = {};
         
         // Check if user is logged in
         if (token) {
-            showDashboard();
-            loadWatchlist();
-            loadAlerts();
+            showApp();
+            loadDashboard();
         }
         
+        // Auth functions
         function switchAuthTab(tab) {
-            document.querySelectorAll('.auth-section .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.auth-section .nav-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.auth-section .tab-content').forEach(t => t.classList.remove('active'));
             
             if (tab === 'login') {
-                document.querySelectorAll('.auth-section .tab')[0].classList.add('active');
+                document.querySelectorAll('.auth-section .nav-tab')[0].classList.add('active');
                 document.getElementById('loginTab').classList.add('active');
             } else {
-                document.querySelectorAll('.auth-section .tab')[1].classList.add('active');
+                document.querySelectorAll('.auth-section .nav-tab')[1].classList.add('active');
                 document.getElementById('registerTab').classList.add('active');
             }
+            lucide.createIcons();
         }
         
-        function switchDashboardTab(tab) {
-            document.querySelectorAll('.dashboard-section .tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.dashboard-section .tab-content').forEach(t => t.classList.remove('active'));
-            
-            if (tab === 'watchlist') {
-                document.querySelectorAll('.dashboard-section .tab')[0].classList.add('active');
-                document.getElementById('watchlistTab').classList.add('active');
-                loadWatchlist();
-            } else {
-                document.querySelectorAll('.dashboard-section .tab')[1].classList.add('active');
-                document.getElementById('alertsTab').classList.add('active');
-                loadAlerts();
-            }
-        }
-        
-        async function login(event) {
-            event.preventDefault();
-            
+        async function login(e) {
+            e.preventDefault();
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
             
             try {
-                const response = await fetch('/api/auth/login', {
+                const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
                 
-                const data = await response.json();
+                const data = await res.json();
                 
-                if (response.ok) {
+                if (data.token) {
                     token = data.token;
-                    currentUser = data.user;
                     localStorage.setItem('token', token);
                     showMessage('authMessage', 'Login successful!', 'success');
                     setTimeout(() => {
-                        showDashboard();
-                        loadWatchlist();
-                        loadAlerts();
-                    }, 1000);
+                        showApp();
+                        loadDashboard();
+                    }, 500);
                 } else {
                     showMessage('authMessage', data.error || 'Login failed', 'error');
                 }
             } catch (error) {
-                showMessage('authMessage', 'Network error', 'error');
+                showMessage('authMessage', 'Network error. Please try again.', 'error');
             }
         }
         
-        async function register(event) {
-            event.preventDefault();
-            
+        async function register(e) {
+            e.preventDefault();
             const name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
-            const phone = document.getElementById('registerPhone').value;
-            const whatsapp = document.getElementById('registerWhatsapp').value;
             
             try {
-                const response = await fetch('/api/auth/register', {
+                const res = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password, phone, whatsapp })
+                    body: JSON.stringify({ name, email, password })
                 });
                 
-                const data = await response.json();
+                const data = await res.json();
                 
-                if (response.ok) {
-                    token = data.token;
-                    currentUser = data.user;
-                    localStorage.setItem('token', token);
-                    showMessage('authMessage', 'Registration successful!', 'success');
-                    setTimeout(() => {
-                        showDashboard();
-                        loadWatchlist();
-                    }, 1000);
+                if (data.message) {
+                    showMessage('authMessage', 'Registration successful! Please login.', 'success');
+                    switchAuthTab('login');
                 } else {
                     showMessage('authMessage', data.error || 'Registration failed', 'error');
                 }
             } catch (error) {
-                showMessage('authMessage', 'Network error', 'error');
+                showMessage('authMessage', 'Network error. Please try again.', 'error');
             }
         }
         
         function logout() {
             token = null;
-            currentUser = null;
             localStorage.removeItem('token');
+            document.getElementById('appSection').classList.remove('active');
             document.getElementById('authSection').classList.add('active');
-            document.getElementById('dashboardSection').classList.remove('active');
+            showMessage('authMessage', 'Logged out successfully', 'info');
         }
         
-        function showDashboard() {
+        function showApp() {
             document.getElementById('authSection').classList.remove('active');
-            document.getElementById('dashboardSection').classList.add('active');
+            document.getElementById('appSection').classList.add('active');
+            lucide.createIcons();
         }
         
-        async function loadWatchlist() {
+        function switchTab(tab) {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(`${tab}Tab`).classList.add('active');
+            
+            // Load data for the tab
+            if (tab === 'dashboard') loadDashboard();
+            else if (tab === 'news') loadNews();
+            else if (tab === 'portfolio') loadPortfolio();
+            else if (tab === 'watchlist') loadWatchlist();
+            else if (tab === 'alerts') loadAlerts();
+            
+            lucide.createIcons();
+        }
+        
+        function showMessage(containerId, message, type) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+        
+        // Dashboard functions
+        async function loadDashboard() {
             try {
-                const response = await fetch('/api/watchlist', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                // Load portfolio summary
+                const portfolioRes = await fetch('/api/portfolio', {
+                    headers: { 'Authorization': token }
                 });
+                const portfolioData = await portfolioRes.json();
                 
-                const data = await response.json();
-                
-                const container = document.getElementById('watchlistContainer');
-                if (data.watchlist.length === 0) {
-                    container.innerHTML = '<p style="color: #666;">Your watchlist is empty. Add stocks to start monitoring.</p>';
-                } else {
-                    container.innerHTML = data.watchlist.map(item => `
-                        <div class="watchlist-item">
-                            <div>
-                                <strong>${item.symbol}</strong> - Min Change: ${item.min_price_change}%
-                            </div>
-                            <button class="btn btn-danger" onclick="removeFromWatchlist('${item.symbol}')">Remove</button>
-                        </div>
-                    `).join('');
+                if (portfolioData.success) {
+                    const summary = portfolioData.portfolio.summary;
+                    document.getElementById('dashTotalValue').textContent = `$${summary.totalCurrent.toFixed(2)}`;
+                    document.getElementById('dashProfitLoss').textContent = `$${summary.totalProfitLoss.toFixed(2)}`;
                 }
+                
+                // Load watchlist count
+                const watchlistRes = await fetch('/api/watchlist', {
+                    headers: { 'Authorization': token }
+                });
+                const watchlistData = await watchlistRes.json();
+                document.getElementById('dashWatchlistCount').textContent = watchlistData.length || 0;
+                
+                // Load alerts count
+                const alertsRes = await fetch('/api/alerts', {
+                    headers: { 'Authorization': token }
+                });
+                const alertsData = await alertsRes.json();
+                const unreadAlerts = alertsData.filter(a => !a.read_at).length;
+                document.getElementById('dashAlertsCount').textContent = unreadAlerts;
+                
+                // Load recent news
+                const newsRes = await fetch('/api/news?limit=5', {
+                    headers: { 'Authorization': token }
+                });
+                const newsData = await newsRes.json();
+                
+                if (newsData.success) {
+                    displayDashboardNews(newsData.news);
+                }
+                
+                lucide.createIcons();
             } catch (error) {
-                showMessage('dashboardMessage', 'Failed to load watchlist', 'error');
+                console.error('Error loading dashboard:', error);
             }
         }
         
-        async function addToWatchlist(event) {
-            event.preventDefault();
+        function displayDashboardNews(news) {
+            const container = document.getElementById('dashboardNewsContainer');
             
-            const symbol = document.getElementById('stockSymbol').value.toUpperCase();
-            const minPriceChange = document.getElementById('minPriceChange').value;
+            if (!news || news.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No recent news</p></div>';
+                return;
+            }
+            
+            container.innerHTML = news.slice(0, 5).map(item => `
+                <div class="news-item" onclick="window.open('${item.url}', '_blank')">
+                    <div class="news-header">
+                        <span class="sentiment-badge sentiment-${item.sentiment || 'neutral'}">
+                            ${item.sentiment || 'neutral'}
+                        </span>
+                    </div>
+                    <div class="news-title">${item.title}</div>
+                    <div class="news-meta">
+                        <span><i data-lucide="calendar" style="width: 14px; height: 14px;"></i> ${new Date(item.published_at).toLocaleDateString()}</span>
+                        <span><i data-lucide="newspaper" style="width: 14px; height: 14px;"></i> ${item.source}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+        
+        // News functions
+        async function loadNews() {
+            const sentimentFilter = document.getElementById('sentimentFilter')?.value || '';
             
             try {
-                const response = await fetch('/api/watchlist', {
+                const newsRes = await fetch(`/api/news?limit=50&sentiment=${sentimentFilter}`, {
+                    headers: { 'Authorization': token }
+                });
+                const newsData = await newsRes.json();
+                
+                const statsRes = await fetch('/api/news/stats', {
+                    headers: { 'Authorization': token }
+                });
+                const statsData = await statsRes.json();
+                
+                if (statsData.success) {
+                    document.getElementById('positiveCount').textContent = statsData.stats.positive;
+                    document.getElementById('neutralCount').textContent = statsData.stats.neutral;
+                    document.getElementById('negativeCount').textContent = statsData.stats.negative;
+                }
+                
+                if (newsData.success) {
+                    displayNews(newsData.news);
+                }
+                
+                lucide.createIcons();
+            } catch (error) {
+                console.error('Error loading news:', error);
+                showMessage('appMessage', 'Failed to load news', 'error');
+            }
+        }
+        
+        function displayNews(news) {
+            const container = document.getElementById('newsContainer');
+            
+            if (!news || news.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i data-lucide="newspaper" class="empty-state-icon" style="width: 48px; height: 48px;"></i><p>No news articles found</p></div>';
+                lucide.createIcons();
+                return;
+            }
+            
+            container.innerHTML = news.map(item => `
+                <div class="news-item" onclick="window.open('${item.url}', '_blank')">
+                    <div class="news-header">
+                        <span class="sentiment-badge sentiment-${item.sentiment || 'neutral'}">
+                            <i data-lucide="${item.sentiment === 'positive' ? 'trending-up' : item.sentiment === 'negative' ? 'trending-down' : 'minus'}" style="width: 12px; height: 12px;"></i>
+                            ${item.sentiment || 'neutral'}
+                        </span>
+                        ${item.related_stocks && item.related_stocks.length > 0 ? `
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                ${item.related_stocks.map(s => `<span class="sentiment-badge sentiment-neutral">${s}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="news-title">${item.title}</div>
+                    ${item.description ? `<p style="color: #6b7280; font-size: 0.875rem; margin-top: 8px;">${item.description}</p>` : ''}
+                    <div class="news-meta">
+                        <span><i data-lucide="calendar" style="width: 14px; height: 14px;"></i> ${new Date(item.published_at).toLocaleDateString()}</span>
+                        <span><i data-lucide="newspaper" style="width: 14px; height: 14px;"></i> ${item.source}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+        
+        // Portfolio functions
+        async function loadPortfolio() {
+            try {
+                const res = await fetch('/api/portfolio', {
+                    headers: { 'Authorization': token }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const summary = data.portfolio.summary;
+                    document.getElementById('portfolioInvested').textContent = `$${summary.totalInvested.toFixed(2)}`;
+                    document.getElementById('portfolioValue').textContent = `$${summary.totalCurrent.toFixed(2)}`;
+                    document.getElementById('portfolioPL').textContent = `$${summary.totalProfitLoss.toFixed(2)}`;
+                    document.getElementById('portfolioReturn').textContent = `${summary.totalProfitLossPercent}%`;
+                    
+                    displayPortfolio(data.portfolio.positions);
+                }
+                
+                // Load dividends
+                const divRes = await fetch('/api/portfolio/dividends', {
+                    headers: { 'Authorization': token }
+                });
+                const divData = await divRes.json();
+                
+                if (divData.success) {
+                    displayDividends(divData.dividends);
+                }
+                
+                lucide.createIcons();
+            } catch (error) {
+                console.error('Error loading portfolio:', error);
+                showMessage('appMessage', 'Failed to load portfolio', 'error');
+            }
+        }
+        
+        function displayPortfolio(positions) {
+            const container = document.getElementById('portfolioContainer');
+            
+            if (!positions || positions.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i data-lucide="briefcase" class="empty-state-icon" style="width: 48px; height: 48px;"></i><p>No positions in portfolio</p></div>';
+                lucide.createIcons();
+                return;
+            }
+            
+            container.innerHTML = positions.map(pos => `
+                <div class="portfolio-position">
+                    <div class="position-header">
+                        <div>
+                            <div class="stock-symbol">${pos.symbol}</div>
+                            <div style="color: #6b7280; font-size: 0.875rem;">${pos.name || pos.symbol}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="stock-price">$${pos.currentPrice.toFixed(2)}</div>
+                            <div class="price-change ${pos.profitLoss >= 0 ? 'price-up' : 'price-down'}">
+                                <i data-lucide="${pos.profitLoss >= 0 ? 'trending-up' : 'trending-down'}" style="width: 14px; height: 14px;"></i>
+                                ${pos.profitLoss >= 0 ? '+' : ''}$${pos.profitLoss.toFixed(2)} (${pos.profitLossPercent}%)
+                            </div>
+                        </div>
+                    </div>
+                    <div class="position-stats">
+                        <div class="position-stat">
+                            <div class="position-stat-label">Quantity</div>
+                            <div class="position-stat-value">${pos.quantity.toFixed(4)}</div>
+                        </div>
+                        <div class="position-stat">
+                            <div class="position-stat-label">Avg Cost</div>
+                            <div class="position-stat-value">$${pos.avgPurchasePrice.toFixed(2)}</div>
+                        </div>
+                        <div class="position-stat">
+                            <div class="position-stat-label">Current Value</div>
+                            <div class="position-stat-value">$${pos.currentValue.toFixed(2)}</div>
+                        </div>
+                        <div class="position-stat">
+                            <div class="position-stat-label">Dividend Yield</div>
+                            <div class="position-stat-value">${pos.dividendYield ? pos.dividendYield.toFixed(2) + '%' : 'N/A'}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+        
+        function displayDividends(dividends) {
+            const container = document.getElementById('dividendsContainer');
+            
+            if (!dividends || dividends.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No dividend history</p></div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border);">
+                                <th style="padding: 12px; text-align: left;">Symbol</th>
+                                <th style="padding: 12px; text-align: left;">Ex-Date</th>
+                                <th style="padding: 12px; text-align: left;">Amount</th>
+                                <th style="padding: 12px; text-align: left;">Estimated Payment</th>
+                                <th style="padding: 12px; text-align: left;">Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dividends.map(div => `
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <td style="padding: 12px; font-weight: 600;">${div.symbol}</td>
+                                    <td style="padding: 12px;">${new Date(div.ex_date).toLocaleDateString()}</td>
+                                    <td style="padding: 12px;">$${parseFloat(div.dividend_amount).toFixed(4)}</td>
+                                    <td style="padding: 12px; color: var(--success-color); font-weight: 600;">$${parseFloat(div.estimated_payment).toFixed(2)}</td>
+                                    <td style="padding: 12px;">${div.dividend_type || 'Regular'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        function showAddTransactionModal() {
+            document.getElementById('transactionDate').valueAsDate = new Date();
+            document.getElementById('addTransactionModal').classList.add('active');
+            lucide.createIcons();
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+        
+        async function addTransaction(e) {
+            e.preventDefault();
+            
+            const transaction = {
+                symbol: document.getElementById('transactionSymbol').value.toUpperCase(),
+                type: document.getElementById('transactionType').value,
+                quantity: parseFloat(document.getElementById('transactionQuantity').value),
+                price: parseFloat(document.getElementById('transactionPrice').value),
+                date: document.getElementById('transactionDate').value,
+                notes: document.getElementById('transactionNotes').value
+            };
+            
+            try {
+                const res = await fetch('/api/portfolio/transaction', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': token
                     },
-                    body: JSON.stringify({ symbol, minPriceChange: parseFloat(minPriceChange) })
+                    body: JSON.stringify(transaction)
                 });
                 
-                const data = await response.json();
+                const data = await res.json();
                 
-                if (response.ok) {
-                    showMessage('dashboardMessage', `${symbol} added to watchlist!`, 'success');
-                    document.getElementById('stockSymbol').value = '';
-                    loadWatchlist();
+                if (data.success) {
+                    showMessage('appMessage', 'Transaction added successfully!', 'success');
+                    closeModal('addTransactionModal');
+                    loadPortfolio();
+                    e.target.reset();
                 } else {
-                    showMessage('dashboardMessage', data.error || 'Failed to add to watchlist', 'error');
+                    showMessage('appMessage', data.error || 'Failed to add transaction', 'error');
                 }
             } catch (error) {
-                showMessage('dashboardMessage', 'Network error', 'error');
+                showMessage('appMessage', 'Network error. Please try again.', 'error');
+            }
+        }
+        
+        // Watchlist functions
+        async function loadWatchlist() {
+            try {
+                const res = await fetch('/api/watchlist', {
+                    headers: { 'Authorization': token }
+                });
+                const data = await res.json();
+                
+                displayWatchlist(data);
+                lucide.createIcons();
+            } catch (error) {
+                console.error('Error loading watchlist:', error);
+                showMessage('appMessage', 'Failed to load watchlist', 'error');
+            }
+        }
+        
+        function displayWatchlist(stocks) {
+            const container = document.getElementById('watchlistContainer');
+            
+            if (!stocks || stocks.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i data-lucide="eye" class="empty-state-icon" style="width: 48px; height: 48px;"></i><p>No stocks in watchlist</p></div>';
+                lucide.createIcons();
+                return;
+            }
+            
+            container.innerHTML = stocks.map(stock => `
+                <div class="stock-item">
+                    <div>
+                        <div class="stock-symbol">${stock.symbol}</div>
+                        <div style="color: #6b7280; font-size: 0.875rem;">Alert threshold: ${stock.min_price_change}%</div>
+                    </div>
+                    <button class="btn btn-danger" onclick="removeFromWatchlist('${stock.symbol}')">
+                        <i data-lucide="trash-2"></i>
+                        Remove
+                    </button>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+        
+        async function addToWatchlist(e) {
+            e.preventDefault();
+            
+            const symbol = document.getElementById('stockSymbol').value.toUpperCase();
+            const minPriceChange = parseFloat(document.getElementById('minPriceChange').value);
+            
+            try {
+                const res = await fetch('/api/watchlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({ symbol, min_price_change: minPriceChange })
+                });
+                
+                const data = await res.json();
+                
+                if (data.message) {
+                    showMessage('appMessage', 'Stock added to watchlist!', 'success');
+                    loadWatchlist();
+                    e.target.reset();
+                } else {
+                    showMessage('appMessage', data.error || 'Failed to add to watchlist', 'error');
+                }
+            } catch (error) {
+                showMessage('appMessage', 'Network error. Please try again.', 'error');
             }
         }
         
         async function removeFromWatchlist(symbol) {
+            if (!confirm(`Remove ${symbol} from watchlist?`)) return;
+            
             try {
-                const response = await fetch(`/api/watchlist/${symbol}`, {
+                const res = await fetch(`/api/watchlist/${symbol}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': token }
                 });
                 
-                const data = await response.json();
+                const data = await res.json();
                 
-                if (response.ok) {
-                    showMessage('dashboardMessage', `${symbol} removed from watchlist`, 'success');
+                if (data.message) {
+                    showMessage('appMessage', 'Stock removed from watchlist', 'success');
                     loadWatchlist();
                 } else {
-                    showMessage('dashboardMessage', data.error || 'Failed to remove from watchlist', 'error');
+                    showMessage('appMessage', data.error || 'Failed to remove from watchlist', 'error');
                 }
             } catch (error) {
-                showMessage('dashboardMessage', 'Network error', 'error');
+                showMessage('appMessage', 'Network error. Please try again.', 'error');
             }
         }
         
+        // Alerts functions
         async function loadAlerts() {
             try {
-                const response = await fetch('/api/alerts?limit=20', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await fetch('/api/alerts', {
+                    headers: { 'Authorization': token }
                 });
+                const data = await res.json();
                 
-                const data = await response.json();
-                
-                const container = document.getElementById('alertsContainer');
-                if (data.alerts.length === 0) {
-                    container.innerHTML = '<p style="color: #666;">No alerts yet.</p>';
-                } else {
-                    container.innerHTML = data.alerts.map(alert => `
-                        <div class="alert-item ${!alert.read_at ? 'unread' : ''}">
-                            <h4>${alert.title}</h4>
-                            <p>${alert.message}</p>
-                            <small>Sent: ${new Date(alert.sent_at).toLocaleString()} via ${alert.alert_type}</small>
-                            ${!alert.read_at ? `<button class="btn btn-primary" style="margin-top: 10px;" onclick="markAsRead(${alert.id})">Mark as Read</button>` : ''}
+                displayAlerts(data);
+                lucide.createIcons();
+            } catch (error) {
+                console.error('Error loading alerts:', error);
+                showMessage('appMessage', 'Failed to load alerts', 'error');
+            }
+        }
+        
+        function displayAlerts(alerts) {
+            const container = document.getElementById('alertsContainer');
+            
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i data-lucide="bell" class="empty-state-icon" style="width: 48px; height: 48px;"></i><p>No alerts yet</p></div>';
+                lucide.createIcons();
+                return;
+            }
+            
+            container.innerHTML = alerts.map(alert => `
+                <div class="stock-item ${alert.read_at ? '' : 'alert-item unread'}" onclick="markAlertRead(${alert.id})">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            ${!alert.read_at ? '<span style="width: 8px; height: 8px; background: var(--info-color); border-radius: 50%;"></span>' : ''}
+                            ${alert.title}
                         </div>
-                    `).join('');
-                }
-            } catch (error) {
-                showMessage('dashboardMessage', 'Failed to load alerts', 'error');
-            }
+                        <div style="color: #6b7280; font-size: 0.875rem; margin-bottom: 8px;">${alert.message}</div>
+                        <div style="color: #9ca3af; font-size: 0.75rem;">
+                            <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+                            ${new Date(alert.sent_at).toLocaleString()}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
         }
         
-        async function markAsRead(alertId) {
+        async function markAlertRead(alertId) {
             try {
-                const response = await fetch(`/api/alerts/${alertId}/read`, {
+                await fetch(`/api/alerts/${alertId}/read`, {
                     method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': token }
                 });
-                
-                if (response.ok) {
-                    loadAlerts();
-                }
+                loadAlerts();
+                loadDashboard(); // Update unread count
             } catch (error) {
-                showMessage('dashboardMessage', 'Failed to mark alert as read', 'error');
+                console.error('Error marking alert as read:', error);
             }
-        }
-        
-        function showMessage(elementId, message, type) {
-            const element = document.getElementById(elementId);
-            element.innerHTML = `<div class="${type}">${message}</div>`;
-            setTimeout(() => {
-                element.innerHTML = '';
-            }, 5000);
         }
     </script>
 </body>
