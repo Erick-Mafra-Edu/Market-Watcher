@@ -852,6 +852,11 @@
         let token = localStorage.getItem('token');
         let currentUser = null;
         let charts = {};
+
+        function getAuthHeader() {
+            if (!token) return '';
+            return token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+        }
         
         // Check if user is logged in
         if (token) {
@@ -972,7 +977,7 @@
             try {
                 // Load portfolio summary
                 const portfolioRes = await fetch('/api/portfolio', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const portfolioData = await portfolioRes.json();
                 
@@ -984,22 +989,22 @@
                 
                 // Load watchlist count
                 const watchlistRes = await fetch('/api/watchlist', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const watchlistData = await watchlistRes.json();
-                document.getElementById('dashWatchlistCount').textContent = watchlistData.length || 0;
+                document.getElementById('dashWatchlistCount').textContent = (watchlistData.watchlist || []).length || 0;
                 
                 // Load alerts count
                 const alertsRes = await fetch('/api/alerts', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const alertsData = await alertsRes.json();
-                const unreadAlerts = alertsData.filter(a => !a.read_at).length;
+                const unreadAlerts = (alertsData.alerts || []).filter(a => !a.read_at).length;
                 document.getElementById('dashAlertsCount').textContent = unreadAlerts;
                 
                 // Load recent news
                 const newsRes = await fetch('/api/news?limit=5', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const newsData = await newsRes.json();
                 
@@ -1045,12 +1050,12 @@
             
             try {
                 const newsRes = await fetch(`/api/news?limit=50&sentiment=${sentimentFilter}`, {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const newsData = await newsRes.json();
                 
                 const statsRes = await fetch('/api/news/stats', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const statsData = await statsRes.json();
                 
@@ -1109,7 +1114,7 @@
         async function loadPortfolio() {
             try {
                 const res = await fetch('/api/portfolio', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const data = await res.json();
                 
@@ -1125,7 +1130,7 @@
                 
                 // Load dividends
                 const divRes = await fetch('/api/portfolio/dividends', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const divData = await divRes.json();
                 
@@ -1251,7 +1256,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': token
+                        'Authorization': getAuthHeader()
                     },
                     body: JSON.stringify(transaction)
                 });
@@ -1275,11 +1280,11 @@
         async function loadWatchlist() {
             try {
                 const res = await fetch('/api/watchlist', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const data = await res.json();
                 
-                displayWatchlist(data);
+                displayWatchlist(data.watchlist || []);
                 lucide.createIcons();
             } catch (error) {
                 console.error('Error loading watchlist:', error);
@@ -1323,9 +1328,9 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': token
+                        'Authorization': getAuthHeader()
                     },
-                    body: JSON.stringify({ symbol, min_price_change: minPriceChange })
+                    body: JSON.stringify({ symbol, minPriceChange })
                 });
                 
                 const data = await res.json();
@@ -1348,7 +1353,7 @@
             try {
                 const res = await fetch(`/api/watchlist/${symbol}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 
                 const data = await res.json();
@@ -1368,11 +1373,11 @@
         async function loadAlerts() {
             try {
                 const res = await fetch('/api/alerts', {
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 const data = await res.json();
                 
-                displayAlerts(data);
+                displayAlerts(data.alerts || []);
                 lucide.createIcons();
             } catch (error) {
                 console.error('Error loading alerts:', error);
@@ -1412,7 +1417,7 @@
             try {
                 await fetch(`/api/alerts/${alertId}/read`, {
                     method: 'PATCH',
-                    headers: { 'Authorization': token }
+                    headers: { 'Authorization': getAuthHeader() }
                 });
                 loadAlerts();
                 loadDashboard(); // Update unread count

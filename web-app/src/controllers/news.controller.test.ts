@@ -15,7 +15,7 @@ describe('NewsController', () => {
     // Mock Pool
     mockPool = {
       query: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<Pool>;
 
     newsController = new NewsController(mockPool);
 

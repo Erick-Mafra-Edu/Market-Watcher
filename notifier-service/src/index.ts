@@ -2,7 +2,7 @@
  * Notifier Service
  * Multi-channel alert notification service with SMTP, Twilio, and WhatsApp support
  */
-import amqp, { Channel, Connection } from 'amqplib';
+import amqp, { Channel, ChannelModel } from 'amqplib';
 import { Pool } from 'pg';
 import {
   MessagingManager,
@@ -47,13 +47,37 @@ interface StockData {
   timestamp: string;
 }
 
+interface FundamentalData {
+  symbol: string;
+  dividend_yield: number | null;
+  p_vp: number | null;
+  p_l: number | null;
+  roe: number | null;
+  liquidity: number | null;
+  scraped_at: string;
+}
+
+interface AlertUser {
+  id: number;
+  email: string;
+  name?: string;
+}
+
 class NotifierService {
-  private connection: Connection | null = null;
+  private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private messagingManager: MessagingManager;
   private sentimentAnalyzer: SentimentAnalyzer;
   private newsCache: Map<string, NewsData[]> = new Map();
   private stockCache: Map<string, StockData> = new Map();
+  private fundamentalsCache: Map<string, FundamentalData> = new Map();
+
+  private readonly maxPLThreshold = parseFloat(process.env.ALERT_MAX_PL || '35');
+  private readonly maxPVpThreshold = parseFloat(process.env.ALERT_MAX_PVP || '6');
+  private readonly minRoeThreshold = parseFloat(process.env.ALERT_MIN_ROE || '0');
+  private readonly minLiquidityThreshold = parseFloat(process.env.ALERT_MIN_LIQUIDITY || '0');
+  private readonly alertCooldownMinutes = parseInt(process.env.ALERT_COOLDOWN_MINUTES || '30');
+  private readonly emailOnlyMode = process.env.NOTIFICATION_CHANNEL_MODE !== 'multi';
 
   constructor() {
     this.messagingManager = new MessagingManager();
@@ -63,15 +87,17 @@ class NotifierService {
 
   private setupMessagingProviders(): void {
     // Setup SMTP Provider
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    if (process.env.SMTP_HOST) {
       const smtpProvider = new SMTPProvider({
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || '587'),
         secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
+        auth: process.env.SMTP_USER && process.env.SMTP_PASS
+          ? {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS,
+            }
+          : undefined,
         from: process.env.SMTP_FROM || 'Market Watcher <noreply@marketwatcher.com>',
       });
       this.messagingManager.registerProvider(smtpProvider);
@@ -97,7 +123,7 @@ class NotifierService {
       this.messagingManager.registerProvider(whatsappProvider);
     }
 
-    console.log('Messaging providers initialized');
+    console.log(`Messaging providers initialized (mode: ${this.emailOnlyMode ? 'email-only' : 'multi'})`);
   }
 
   async connectRabbitMQ(): Promise<void> {
@@ -156,7 +182,91 @@ class NotifierService {
       }
     });
 
+    // Subscribe to fundamentals updates
+    await this.channel.assertQueue('fundamentals_queue', { durable: true });
+    await this.channel.consume('fundamentals_queue', async (msg) => {
+      if (msg) {
+        try {
+          const fundamentalsData: FundamentalData = JSON.parse(msg.content.toString());
+          await this.handleFundamentalsUpdate(fundamentalsData);
+          this.channel!.ack(msg);
+        } catch (error) {
+          console.error('Error processing fundamentals update:', error);
+          this.channel!.nack(msg, false, false);
+        }
+      }
+    });
+
     console.log('Queue consumers set up');
+  }
+
+  private validateFundamentalPayload(data: FundamentalData): void {
+    if (!data.symbol || typeof data.symbol !== 'string') {
+      throw new Error('Invalid fundamentals payload: symbol is required');
+    }
+  }
+
+  private normalizeNumeric(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  private async getOrCreateStockId(symbol: string): Promise<number> {
+    const normalizedSymbol = symbol.toUpperCase();
+    const existingStock = await pool.query(
+      'SELECT id FROM stocks WHERE symbol = $1',
+      [normalizedSymbol]
+    );
+
+    if (existingStock.rows.length > 0) {
+      return existingStock.rows[0].id;
+    }
+
+    const insertedStock = await pool.query(
+      'INSERT INTO stocks (symbol, name) VALUES ($1, $2) RETURNING id',
+      [normalizedSymbol, normalizedSymbol]
+    );
+
+    return insertedStock.rows[0].id;
+  }
+
+  async handleFundamentalsUpdate(fundamentalData: FundamentalData): Promise<void> {
+    this.validateFundamentalPayload(fundamentalData);
+
+    const normalizedData: FundamentalData = {
+      symbol: fundamentalData.symbol.toUpperCase(),
+      dividend_yield: this.normalizeNumeric(fundamentalData.dividend_yield),
+      p_vp: this.normalizeNumeric(fundamentalData.p_vp),
+      p_l: this.normalizeNumeric(fundamentalData.p_l),
+      roe: this.normalizeNumeric(fundamentalData.roe),
+      liquidity: this.normalizeNumeric(fundamentalData.liquidity),
+      scraped_at: fundamentalData.scraped_at,
+    };
+
+    console.log(`Processing fundamentals update: ${normalizedData.symbol}`);
+
+    this.fundamentalsCache.set(normalizedData.symbol, normalizedData);
+
+    const stockId = await this.getOrCreateStockId(normalizedData.symbol);
+    await pool.query(
+      `INSERT INTO status_invest_data (stock_id, dividend_yield, p_vp, p_l, roe, liquidity, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamp, CURRENT_TIMESTAMP))`,
+      [
+        stockId,
+        normalizedData.dividend_yield,
+        normalizedData.p_vp,
+        normalizedData.p_l,
+        normalizedData.roe,
+        normalizedData.liquidity,
+        normalizedData.scraped_at || null,
+      ]
+    );
+
+    await this.checkAlertConditions();
   }
 
   async handleNews(newsData: NewsData): Promise<void> {
@@ -208,10 +318,18 @@ class NotifierService {
   async checkAlertConditions(): Promise<void> {
     // Get users with watchlist
     const result = await pool.query(`
-      SELECT DISTINCT u.id, u.email, u.name, s.symbol, uw.min_price_change
+      SELECT DISTINCT u.id, u.email, u.name, s.symbol, uw.min_price_change,
+             sid.dividend_yield, sid.p_vp, sid.p_l, sid.roe, sid.liquidity
       FROM users u
       INNER JOIN user_watchlist uw ON u.id = uw.user_id
       INNER JOIN stocks s ON uw.stock_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT dividend_yield, p_vp, p_l, roe, liquidity
+        FROM status_invest_data
+        WHERE stock_id = s.id
+        ORDER BY updated_at DESC
+        LIMIT 1
+      ) sid ON true
     `);
 
     for (const row of result.rows) {
@@ -221,11 +339,46 @@ class NotifierService {
       if (stockData && Math.abs(stockData.changePercent) >= row.min_price_change) {
         const hasRelevantNews = this.hasRelevantNews(row.symbol);
         
-        if (hasRelevantNews) {
+        const hasValidFundamentals = this.passesFundamentalRules(row);
+        const inCooldown = await this.isInCooldown(row.id, row.symbol);
+
+        if (hasRelevantNews && hasValidFundamentals && !inCooldown) {
           await this.sendAlert(row, stockData);
         }
       }
     }
+  }
+
+  private passesFundamentalRules(watchlistRow: any): boolean {
+    const cached = this.fundamentalsCache.get(watchlistRow.symbol);
+    const pL = this.normalizeNumeric(cached?.p_l ?? watchlistRow.p_l);
+    const pVp = this.normalizeNumeric(cached?.p_vp ?? watchlistRow.p_vp);
+    const roe = this.normalizeNumeric(cached?.roe ?? watchlistRow.roe);
+    const liquidity = this.normalizeNumeric(cached?.liquidity ?? watchlistRow.liquidity);
+
+    if (pL === null || pVp === null || roe === null || liquidity === null) {
+      return false;
+    }
+
+    return pL <= this.maxPLThreshold &&
+      pVp <= this.maxPVpThreshold &&
+      roe >= this.minRoeThreshold &&
+      liquidity >= this.minLiquidityThreshold;
+  }
+
+  private async isInCooldown(userId: number, symbol: string): Promise<boolean> {
+    const result = await pool.query(
+      `SELECT 1
+       FROM alerts a
+       INNER JOIN stocks s ON a.stock_id = s.id
+       WHERE a.user_id = $1
+         AND s.symbol = $2
+         AND a.sent_at > NOW() - ($3 || ' minutes')::interval
+       LIMIT 1`,
+      [userId, symbol, this.alertCooldownMinutes]
+    );
+
+    return result.rows.length > 0;
   }
 
   private hasRelevantNews(symbol: string): boolean {
@@ -243,7 +396,7 @@ class NotifierService {
     return false;
   }
 
-  async sendAlert(user: any, stockData: StockData): Promise<void> {
+  async sendAlert(user: AlertUser, stockData: StockData): Promise<void> {
     console.log(`Sending alert to user ${user.email} for ${stockData.symbol}`);
 
     // Create recipient
@@ -271,9 +424,10 @@ class NotifierService {
     };
 
     try {
-      // Send via all available channels
+      // Send via configured channels
       const results = await this.messagingManager.send(recipient, htmlMessage, {
-        fallbackEnabled: true,
+        preferredProviders: this.emailOnlyMode ? ['SMTP'] : undefined,
+        fallbackEnabled: !this.emailOnlyMode,
       });
 
       // Log results
@@ -307,7 +461,7 @@ class NotifierService {
     }
   }
 
-  private createHtmlAlert(user: any, stockData: StockData): string {
+  private createHtmlAlert(user: AlertUser, stockData: StockData): string {
     const direction = stockData.changePercent > 0 ? 'UP' : 'DOWN';
     const color = stockData.changePercent > 0 ? '#28a745' : '#dc3545';
 
@@ -353,7 +507,7 @@ class NotifierService {
     `;
   }
 
-  private createTextAlert(user: any, stockData: StockData): string {
+  private createTextAlert(user: AlertUser, stockData: StockData): string {
     const direction = stockData.changePercent > 0 ? 'UP ↑' : 'DOWN ↓';
     
     return `

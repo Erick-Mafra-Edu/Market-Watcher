@@ -1,5 +1,7 @@
 # Market-Watcher 📊
 
+[![CI/CD](https://github.com/Erick-Mafra-Edu/Market-Watcher/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Erick-Mafra-Edu/Market-Watcher/actions/workflows/ci-cd.yml)
+
 **Investment Alert System via Docker Compose**
 
 A comprehensive multi-service investment alert system that monitors market news and stock prices, notifying users through multiple channels (Email, SMS, WhatsApp) when significant market events occur.

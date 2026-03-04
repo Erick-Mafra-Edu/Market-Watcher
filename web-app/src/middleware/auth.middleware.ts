@@ -35,12 +35,12 @@ export const authMiddleware = (
     
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader) {
       res.status(401).json({ error: 'No token provided' });
       return;
     }
 
-    const token = authHeader.substring(7);
+    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
 
     const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
 

@@ -4,7 +4,7 @@
  */
 import express from 'express';
 import yahooFinance from 'yahoo-finance2';
-import amqp, { Channel, Connection } from 'amqplib';
+import amqp, { Channel, ChannelModel } from 'amqplib';
 import { Pool } from 'pg';
 
 // Configuration
@@ -33,8 +33,8 @@ interface StockData {
   timestamp: string;
 }
 
-class ApiHandler {
-  private connection: Connection | null = null;
+export class ApiHandler {
+  private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private app: express.Application;
 
@@ -79,6 +79,10 @@ class ApiHandler {
         res.status(500).json({ error: error.message });
       }
     });
+  }
+
+  getApp(): express.Application {
+    return this.app;
   }
 
   async connectRabbitMQ(): Promise<void> {
@@ -256,13 +260,14 @@ class ApiHandler {
   }
 }
 
-// Start the service
-const handler = new ApiHandler();
+if (require.main === module) {
+  const handler = new ApiHandler();
 
-process.on('SIGINT', async () => {
-  console.log('Shutting down API Handler...');
-  await handler.close();
-  process.exit(0);
-});
+  process.on('SIGINT', async () => {
+    console.log('Shutting down API Handler...');
+    await handler.close();
+    process.exit(0);
+  });
 
-handler.start();
+  handler.start();
+}

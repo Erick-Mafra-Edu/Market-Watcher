@@ -4,13 +4,7 @@
  */
 import { Request, Response } from 'express';
 import { Pool } from 'pg';
-
-interface AuthRequest extends Request {
-  user?: {
-    id: number;
-    email: string;
-  };
-}
+import { AuthRequest } from '../middleware/auth.middleware';
 
 export class PortfolioController {
   private pool: Pool;
@@ -24,7 +18,7 @@ export class PortfolioController {
    */
   async getPortfolio(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId;
 
       const query = `
         SELECT 
@@ -125,7 +119,7 @@ export class PortfolioController {
    */
   async addTransaction(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId;
       const { symbol, quantity, price, date, type, notes } = req.body;
 
       if (!symbol || !quantity || !price || !date) {
@@ -179,7 +173,7 @@ export class PortfolioController {
    */
   async getTransactions(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId;
       const { symbol } = req.query;
 
       let query = `
@@ -227,7 +221,7 @@ export class PortfolioController {
    */
   async getDividends(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId;
 
       const query = `
         SELECT 

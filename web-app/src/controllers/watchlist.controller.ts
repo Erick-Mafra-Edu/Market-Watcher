@@ -31,7 +31,8 @@ export class WatchlistController {
   async addToWatchlist(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.userId;
-      const { symbol, minPriceChange } = req.body;
+      const { symbol, minPriceChange, min_price_change } = req.body;
+      const threshold = minPriceChange ?? min_price_change;
 
       if (!symbol) {
         res.status(400).json({ error: 'Symbol is required' });
@@ -59,7 +60,7 @@ export class WatchlistController {
       // Add to watchlist
       await this.pool.query(
         'INSERT INTO user_watchlist (user_id, stock_id, min_price_change) VALUES ($1, $2, $3) ON CONFLICT (user_id, stock_id) DO UPDATE SET min_price_change = $3',
-        [userId, stockId, minPriceChange || 5.0]
+        [userId, stockId, threshold || 5.0]
       );
 
       res.status(201).json({ message: 'Added to watchlist successfully' });

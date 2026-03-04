@@ -15,7 +15,7 @@ export interface SMTPConfig {
   host: string;
   port: number;
   secure?: boolean;
-  auth: {
+  auth?: {
     user: string;
     pass: string;
   };

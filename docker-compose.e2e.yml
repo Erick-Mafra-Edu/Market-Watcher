@@ -1,0 +1,4 @@
+services:
+  web-app:
+    environment:
+      JWT_SECRET: e2e-test-secret

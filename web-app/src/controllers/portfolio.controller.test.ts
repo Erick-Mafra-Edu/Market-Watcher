@@ -1,16 +1,10 @@
 /**
  * Tests for Portfolio Controller
  */
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { Pool } from 'pg';
 import { PortfolioController } from '../controllers/portfolio.controller';
-
-interface AuthRequest extends Request {
-  user?: {
-    id: number;
-    email: string;
-  };
-}
+import { AuthRequest } from '../middleware/auth.middleware';
 
 describe('PortfolioController', () => {
   let portfolioController: PortfolioController;
@@ -22,13 +16,14 @@ describe('PortfolioController', () => {
     // Mock Pool
     mockPool = {
       query: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<Pool>;
 
     portfolioController = new PortfolioController(mockPool);
 
     // Mock Express request and response with user
     mockRequest = {
-      user: { id: 1, email: 'test@example.com' },
+      userId: 1,
+      userEmail: 'test@example.com',
       query: {},
       params: {},
       body: {},

@@ -20,7 +20,7 @@ const NEGATIVE_WORDS = [
   'worried', 'risk', 'risks', 'threat', 'threats', 'downgrade', 'downgraded', 'cut', 'cuts'
 ];
 
-const INTENSITY_MODIFIERS = {
+const INTENSITY_MODIFIERS: Record<string, number> = {
   'very': 1.5,
   'extremely': 2.0,
   'highly': 1.5,

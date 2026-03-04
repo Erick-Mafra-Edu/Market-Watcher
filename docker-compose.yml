@@ -40,6 +40,16 @@ services:
       timeout: 5s
       retries: 5
 
+  # Local SMTP for development/E2E testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: market-watcher-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - market-watcher-network
+
   # GNews Service (Python) - News scraping
   gnews-service:
     build:
@@ -121,9 +131,10 @@ services:
       DATABASE_NAME: ${POSTGRES_DB:-market_watcher}
       DATABASE_USER: ${POSTGRES_USER:-postgres}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      NOTIFICATION_CHANNEL_MODE: ${NOTIFICATION_CHANNEL_MODE:-email-only}
       # SMTP Configuration
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
@@ -141,6 +152,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     networks:
       - market-watcher-network
     restart: unless-stopped
