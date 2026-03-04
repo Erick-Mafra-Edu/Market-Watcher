@@ -25,6 +25,15 @@ const pool = new Pool({
   password: process.env.DATABASE_PASSWORD || 'postgres',
 });
 
+// Trust proxy — required when running behind a reverse proxy or Docker network
+// so that express-rate-limit reads the correct client IP from X-Forwarded-For.
+const trustProxySetting = process.env.TRUST_PROXY ?? '1';
+if (trustProxySetting === 'true' || trustProxySetting === '1') {
+  app.set('trust proxy', 1);
+} else if (trustProxySetting !== 'false' && trustProxySetting !== '0') {
+  app.set('trust proxy', trustProxySetting);
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
