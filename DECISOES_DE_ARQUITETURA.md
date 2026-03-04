@@ -81,7 +81,7 @@ Registrar as principais decisões arquiteturais do projeto com base no código a
 
 ## ADR-013 — Estratégia de Provedor para Dados Financeiros (MVP + Evolução)
 
-- **Status:** Aceita e implementada parcialmente
+- **Status:** Aceita e implementada (atualizada com ADR-014)
 - **Data:** 2026-03-04
 
 ### Problema
@@ -125,6 +125,56 @@ Adotar **estratégia em camadas**:
 - Médio prazo: necessidade de abstrair melhor o provider no `api-handler` (adapter por fonte).
 - Operacional: incluir retry/backoff, circuit breaker e métricas por provedor para tomada de decisão de failover.
 - Qualidade: criar testes de contrato por fonte de dados e monitorar erro por símbolo/endpoint.
+
+---
+
+## ADR-014 — Migração para BRAPI como Provedor Primário de Cotações
+
+- **Status:** Aceita e implementada
+- **Data:** 2026-03-04
+
+### Problema
+
+A biblioteca `yahoo-finance2` é uma solução de scraping indireto sobre o Yahoo Finance. Com a desativação progressiva das APIs públicas do Yahoo Finance, essa dependência apresentou instabilidade crescente, quebrando a obtenção de cotações no `api-handler`.
+
+### Alternativas consideradas
+
+1. **Manter `yahoo-finance2` como única fonte**
+   - Contras: instabilidade crescente, risco de bloqueio, sem SLA.
+
+2. **Substituir completamente por BRAPI**
+   - Prós: API oficial, foco em ativos brasileiros (B3), gratuita no free tier.
+   - Contras: cobertura limitada a ativos B3 e alguns internacionais; não cobre todos os símbolos globais (ex.: cripto, ETFs americanos).
+
+3. **BRAPI como primário + Yahoo Finance como fallback**
+   - Prós: resolve o problema para ativos B3 com API oficial e confiável; mantém compatibilidade para símbolos não cobertos pela BRAPI.
+   - Contras: mantém dependência no `yahoo-finance2` como secundário.
+
+### Decisão
+
+Adotar **BRAPI como provedor primário** e `yahoo-finance2` como **fallback automático** para símbolos não suportados pela BRAPI (ex.: ações norte-americanas, cripto).
+
+### Implementação
+
+- Criada abstração `StockProvider` (interface com `fetchQuote` e `fetchHistory`).
+- `BrapiProvider`: implementa a interface consumindo `https://brapi.dev/api`. Suporta token via variável de ambiente `BRAPI_TOKEN`.
+- `YahooFinanceProvider`: implementa a interface usando `yahoo-finance2` (fallback).
+- `ApiHandler` instancia ambos e tenta BRAPI primeiro; em caso de erro, aciona o Yahoo Finance automaticamente.
+- `BRAPI_TOKEN` adicionado ao `.env.example` e ao `docker-compose.yml` (opcional; funciona sem token no free tier com limite de requisições).
+
+### Motivo da escolha
+
+- Segue o princípio **"Preferir APIs oficiais antes de scraping"** das instruções de arquitetura.
+- Resolve a instabilidade da API do Yahoo Finance desativada.
+- Mantém retrocompatibilidade sem necessidade de migração forçada de todos os símbolos de uma vez.
+- Mantém o padrão de extensibilidade do `api-handler` para adição de novos provedores.
+
+### Consequências
+
+- Ativos brasileiros (B3) passam a usar fonte mais estável e oficial.
+- Ativos fora do escopo da BRAPI continuam funcionando via fallback do Yahoo Finance.
+- Para remover a dependência do `yahoo-finance2` completamente, será necessário avaliar um provedor global alternativo (ex.: Alpha Vantage, Polygon.io) em iteração futura.
+- Logs de `console.warn` indicam quando o fallback é acionado, facilitando monitoramento de migração.
 
 ---
 
