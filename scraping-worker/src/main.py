@@ -27,6 +27,7 @@ RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'admin')
 CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '300'))
 BRAPI_TOKEN = os.getenv('BRAPI_TOKEN')
 BRAPI_BASE_URL = os.getenv('BRAPI_BASE_URL', 'https://brapi.dev/api')
+YAHOO_CHART_BASE_URL = os.getenv('YAHOO_CHART_BASE_URL', 'https://query2.finance.yahoo.com/v8/finance/chart')
 
 # Brazilian stocks to monitor
 BRAZILIAN_STOCKS = [
@@ -52,6 +53,7 @@ class StatusInvestScraper:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+        self.brapi_dividends_enabled = True
         self.connection = None
         self.channel = None
         if connect_rabbitmq:
@@ -231,10 +233,22 @@ class StatusInvestScraper:
             logger.error(f"Error extracting {indicator_name}: {e}")
             return None
 
-    def _normalize_date(self, raw_value: str) -> Optional[str]:
+    def _normalize_date(self, raw_value) -> Optional[str]:
         """Normalize date strings to YYYY-MM-DD."""
         if not raw_value:
             return None
+
+        if isinstance(raw_value, (int, float)):
+            try:
+                return datetime.fromtimestamp(float(raw_value), tz=timezone.utc).date().isoformat()
+            except (ValueError, OSError, OverflowError):
+                return None
+
+        if isinstance(raw_value, str) and raw_value.strip().isdigit():
+            try:
+                return datetime.fromtimestamp(float(raw_value.strip()), tz=timezone.utc).date().isoformat()
+            except (ValueError, OSError, OverflowError):
+                return None
 
         for pattern in ['%d/%m/%Y', '%Y-%m-%d']:
             try:
@@ -414,6 +428,9 @@ class StatusInvestScraper:
 
     def fetch_brapi_dividend_events(self, symbol: str) -> List[Dict]:
         """Fetch dividend events from BRAPI as a complementary source."""
+        if not self.brapi_dividends_enabled:
+            return []
+
         try:
             params = {
                 'modules': 'dividends',
@@ -441,6 +458,21 @@ class StatusInvestScraper:
 
             return events
         except requests.RequestException as e:
+            response = getattr(e, 'response', None)
+            if response is not None and response.status_code == 400:
+                try:
+                    payload = response.json()
+                    message = str(payload.get('message', ''))
+                except ValueError:
+                    message = response.text
+
+                if 'não estão disponíveis no seu plano' in message or 'nao estao disponiveis no seu plano' in message.lower():
+                    self.brapi_dividends_enabled = False
+                    logger.warning(
+                        'BRAPI dividends module is unavailable for current plan. '
+                        'Disabling BRAPI dividends fetch and using fallback sources only.'
+                    )
+
             logger.error(f"Error fetching BRAPI dividend events for {symbol}: {e}")
             return []
         except ValueError as e:
@@ -448,6 +480,68 @@ class StatusInvestScraper:
             return []
         except Exception as e:
             logger.error(f"Unexpected error fetching BRAPI dividend events for {symbol}: {e}")
+            return []
+
+    def _extract_yahoo_dividend_events(self, payload: Dict, symbol: str) -> List[Dict]:
+        """Extract dividend events from Yahoo chart/events payload."""
+        events: List[Dict] = []
+        chart = payload.get('chart') if isinstance(payload, dict) else None
+        results = chart.get('result') if isinstance(chart, dict) else None
+
+        if not isinstance(results, list) or len(results) == 0:
+            return events
+
+        result = results[0]
+        if not isinstance(result, dict):
+            return events
+
+        raw_dividends = (result.get('events') or {}).get('dividends')
+        if not isinstance(raw_dividends, dict):
+            return events
+
+        for raw_event in raw_dividends.values():
+            if not isinstance(raw_event, dict):
+                continue
+
+            normalized = self._normalize_dividend_event(raw_event, symbol, 'yahoo')
+            if normalized:
+                normalized['dividend_type'] = normalized.get('dividend_type') or 'DIVIDEND'
+                events.append(normalized)
+
+        return events
+
+    def fetch_yahoo_dividend_events(self, symbol: str) -> List[Dict]:
+        """Fetch dividend events from Yahoo chart API as temporary fallback source."""
+        try:
+            yahoo_symbol = symbol if symbol.endswith('.SA') else f"{symbol}.SA"
+            response = self.session.get(
+                f"{YAHOO_CHART_BASE_URL}/{yahoo_symbol}",
+                params={
+                    'interval': '1mo',
+                    'range': '10y',
+                    'events': 'div',
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+
+            payload = response.json()
+            events = self._extract_yahoo_dividend_events(payload, symbol)
+
+            if events:
+                logger.info(f"Fetched {len(events)} Yahoo dividend events for {symbol}")
+            else:
+                logger.info(f"No Yahoo dividend events found for {symbol}")
+
+            return events
+        except requests.RequestException as e:
+            logger.error(f"Error fetching Yahoo dividend events for {symbol}: {e}")
+            return []
+        except ValueError as e:
+            logger.error(f"Error parsing Yahoo response for {symbol}: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching Yahoo dividend events for {symbol}: {e}")
             return []
 
     def merge_dividend_events(self, *event_lists: List[Dict]) -> List[Dict]:
@@ -553,9 +647,11 @@ class StatusInvestScraper:
 
                     statusinvest_dividend_events = self.scrape_dividend_events(symbol)
                     brapi_dividend_events = self.fetch_brapi_dividend_events(symbol)
+                    yahoo_dividend_events = self.fetch_yahoo_dividend_events(symbol)
                     merged_dividend_events = self.merge_dividend_events(
                         statusinvest_dividend_events,
-                        brapi_dividend_events
+                        brapi_dividend_events,
+                        yahoo_dividend_events,
                     )
                     self.publish_dividend_events(merged_dividend_events)
                     

@@ -94,6 +94,25 @@ _BRAPI_DIVIDENDS_FIXTURE = {
     ]
 }
 
+_YAHOO_DIVIDENDS_FIXTURE = {
+    "chart": {
+        "result": [
+            {
+                "meta": {"symbol": "PETR4.SA"},
+                "events": {
+                    "dividends": {
+                        "1714435200": {
+                            "date": 1714435200,
+                            "amount": 0.67
+                        }
+                    }
+                }
+            }
+        ],
+        "error": None
+    }
+}
+
 _REQUIRED_FIELDS = [
     "symbol",
     "dividend_yield",
@@ -378,6 +397,21 @@ class ScrapingWorkerContractTests(unittest.TestCase):
         self.assertEqual(len(merged), 1)
         self.assertEqual(merged[0]["source"], "brapi")
         self.assertEqual(merged[0]["payment_date"], "2026-05-25")
+
+    def test_fetch_yahoo_dividend_events_extracts_required_fields(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = _YAHOO_DIVIDENDS_FIXTURE
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(self.scraper.session, "get", return_value=mock_response):
+            events = self.scraper.fetch_yahoo_dividend_events("PETR4")
+
+        self.assertEqual(len(events), 1)
+        first = events[0]
+        self.assertEqual(first["symbol"], "PETR4")
+        self.assertEqual(first["source"], "yahoo")
+        self.assertEqual(first["ex_date"], "2024-04-30")
+        self.assertAlmostEqual(first["dividend_amount"], 0.67)
 
 
 if __name__ == "__main__":

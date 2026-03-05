@@ -735,9 +735,20 @@ Market Watcher - Automated Alert
     `.trim();
   }
 
+  private async ensureDividendSchema(): Promise<void> {
+    // Keep runtime compatible with existing DB volumes created before schema updates.
+    await pool.query('ALTER TABLE dividend_history ADD COLUMN IF NOT EXISTS source VARCHAR(100)');
+    await pool.query('ALTER TABLE dividend_history ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    await pool.query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_dividend_history_stock_ex_date_unique ON dividend_history(stock_id, ex_date)'
+    );
+  }
+
   async start(): Promise<void> {
     try {
       console.log('Starting Notifier Service...');
+
+      await this.ensureDividendSchema();
       
       // Connect to RabbitMQ
       await this.connectRabbitMQ();
