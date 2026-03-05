@@ -60,7 +60,7 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER:-admin}
       RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
-      GNEWS_API_KEY: ${GNEWS_API_KEY}
+      GNEWS_API_KEY: ${GNEWS_API_KEY:-SAMPLE_API_KEY}
       CHECK_INTERVAL: ${GNEWS_CHECK_INTERVAL:-300}
     depends_on:
       rabbitmq:
@@ -86,7 +86,7 @@ services:
       DATABASE_USER: ${POSTGRES_USER:-postgres}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       CHECK_INTERVAL: ${API_CHECK_INTERVAL:-300}
-      BRAPI_TOKEN: ${BRAPI_TOKEN:-}
+      BRAPI_TOKEN: ${BRAPI_TOKEN:-hDMfQ6HLaw4EFWCWCRccpX}
     ports:
       - "3001:3001"
     depends_on:
@@ -137,12 +137,12 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USER: ${SMTP_USER:-SampleUser}
+      SMTP_PASS: ${SMTP_PASS:-SamplePassword}
+      SMTP_FROM: ${SMTP_FROM:-sample@example.com}
       # Twilio Configuration
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
       # WhatsApp Configuration (utter-labs/wa-bot-api)
       WHATSAPP_API_URL: ${WHATSAPP_API_URL}
@@ -166,7 +166,7 @@ services:
       dockerfile: Dockerfile
     container_name: market-watcher-web
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       DATABASE_HOST: database
       DATABASE_PORT: 5432
       DATABASE_NAME: ${POSTGRES_DB:-market_watcher}

@@ -9,11 +9,11 @@ RUN npm install
 # Copy application code
 COPY tsconfig.json ./
 COPY src/ ./src/
+COPY frontend/ ./frontend/
 COPY public/ ./public/
 
-# Build TypeScript
-RUN npm install -g typescript
-RUN tsc
+# Build server + client
+RUN npm run build
 
 # Expose port
 EXPOSE 3000

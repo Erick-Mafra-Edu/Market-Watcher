@@ -1,0 +1,4 @@
+gap-features 72135 logs/agents/gap-features.log docs/agents/results/gap-features.md
+gap-tests 72136 logs/agents/gap-tests.log docs/agents/results/gap-tests.md
+communication-task 72137 logs/agents/communication-task.log docs/tasks/communication.md
+docs-reconcile 72139 logs/agents/docs-reconcile.log docs/agents/results/docs-reconcile.md

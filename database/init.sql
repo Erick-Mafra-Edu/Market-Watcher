@@ -97,10 +97,15 @@ CREATE TABLE IF NOT EXISTS user_portfolio (
     quantity DECIMAL(15, 4) NOT NULL,
     purchase_price DECIMAL(15, 2) NOT NULL,
     purchase_date TIMESTAMP NOT NULL,
+    sale_date TIMESTAMP,
     transaction_type VARCHAR(10) DEFAULT 'BUY', -- BUY or SELL
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Backward-compatible migration for existing databases
+ALTER TABLE user_portfolio
+ADD COLUMN IF NOT EXISTS sale_date TIMESTAMP;
 
 -- Dividend history
 CREATE TABLE IF NOT EXISTS dividend_history (

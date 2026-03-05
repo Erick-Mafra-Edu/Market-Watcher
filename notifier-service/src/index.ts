@@ -78,6 +78,33 @@ class NotifierService {
   private readonly minLiquidityThreshold = parseFloat(process.env.ALERT_MIN_LIQUIDITY || '0');
   private readonly alertCooldownMinutes = parseInt(process.env.ALERT_COOLDOWN_MINUTES || '30');
   private readonly emailOnlyMode = process.env.NOTIFICATION_CHANNEL_MODE !== 'multi';
+  private readonly commonTickerStopwords = new Set([
+    'A',
+    'AN',
+    'AND',
+    'ARE',
+    'AS',
+    'AT',
+    'BE',
+    'BY',
+    'CEO',
+    'CFO',
+    'FOR',
+    'FROM',
+    'GDP',
+    'IN',
+    'IS',
+    'IT',
+    'ITS',
+    'OF',
+    'ON',
+    'OR',
+    'THE',
+    'TO',
+    'US',
+    'USA',
+    'WITH',
+  ]);
 
   constructor() {
     this.messagingManager = new MessagingManager();
@@ -215,6 +242,65 @@ class NotifierService {
     return Number.isFinite(numericValue) ? numericValue : null;
   }
 
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private getSymbolMentionScore(symbol: string, title: string, description: string): number {
+    const escapedSymbol = this.escapeRegExp(symbol.toUpperCase());
+    const pattern = new RegExp(`(^|[^A-Z0-9.])${escapedSymbol}([^A-Z0-9.]|$)`, 'i');
+
+    if (pattern.test(title)) {
+      return 0.95;
+    }
+
+    if (pattern.test(description)) {
+      return 0.7;
+    }
+
+    return 0;
+  }
+
+  private extractCandidateSymbols(newsData: NewsData): string[] {
+    const rawText = `${newsData.title || ''} ${newsData.description || ''} ${newsData.topic || ''}`.toUpperCase();
+    const matches = rawText.match(/\b[A-Z]{2,6}(?:\.[A-Z]{1,3})?\b/g) || [];
+
+    return [...new Set(matches)]
+      .filter(symbol => !this.commonTickerStopwords.has(symbol));
+  }
+
+  private async linkNewsToMentionedStocks(newsId: number, newsData: NewsData): Promise<void> {
+    const title = (newsData.title || '').toUpperCase();
+    const description = (newsData.description || '').toUpperCase();
+    const candidateSymbols = this.extractCandidateSymbols(newsData);
+
+    if (candidateSymbols.length === 0) {
+      return;
+    }
+
+    const knownStocks = await pool.query(
+      'SELECT id, symbol FROM stocks WHERE symbol = ANY($1::text[])',
+      [candidateSymbols]
+    );
+
+    for (const stock of knownStocks.rows) {
+      const symbol = String(stock.symbol).toUpperCase();
+      const relevanceScore = this.getSymbolMentionScore(symbol, title, description);
+
+      if (relevanceScore <= 0) {
+        continue;
+      }
+
+      await pool.query(
+        `INSERT INTO stock_news (stock_id, news_id, relevance_score)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (stock_id, news_id) DO UPDATE
+         SET relevance_score = GREATEST(stock_news.relevance_score, EXCLUDED.relevance_score)`,
+        [stock.id, newsId, relevanceScore]
+      );
+    }
+  }
+
   private async getOrCreateStockId(symbol: string): Promise<number> {
     const normalizedSymbol = symbol.toUpperCase();
     const existingStock = await pool.query(
@@ -278,13 +364,18 @@ class NotifierService {
 
     // Save news to database with sentiment
     try {
-      await pool.query(
+      const savedNews = await pool.query(
         `INSERT INTO news_articles (title, description, url, source, published_at, sentiment_score)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (url) DO UPDATE 
-         SET sentiment_score = EXCLUDED.sentiment_score`,
+         SET sentiment_score = EXCLUDED.sentiment_score
+         RETURNING id`,
         [newsData.title, newsData.description, newsData.url, newsData.source, newsData.published_at, sentiment.score]
       );
+
+      if (savedNews.rows.length > 0) {
+        await this.linkNewsToMentionedStocks(savedNews.rows[0].id, newsData);
+      }
     } catch (error) {
       console.error('Error saving news to database:', error);
     }

@@ -152,7 +152,8 @@ describe('ApiHandler', () => {
   });
 
   it('should return 503 when upstream returns invalid JSON (SyntaxError)', async () => {
-    mockedYahoo.quote.mockRejectedValue(
+    mockBrapiInstance.fetchQuote.mockRejectedValue(new Error('BRAPI unavailable'));
+    mockYahooInstance.fetchQuote.mockRejectedValue(
       new SyntaxError('Unexpected token T in JSON at position 0')
     );
 
@@ -166,7 +167,8 @@ describe('ApiHandler', () => {
   });
 
   it('should return 500 for non-upstream errors on /api/stock/:symbol', async () => {
-    mockedYahoo.quote.mockRejectedValue(new Error('Internal error'));
+    mockBrapiInstance.fetchQuote.mockRejectedValue(new Error('BRAPI unavailable'));
+    mockYahooInstance.fetchQuote.mockRejectedValue(new Error('Internal error'));
 
     const handler = new ApiHandler();
     const app = handler.getApp();

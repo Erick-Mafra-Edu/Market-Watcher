@@ -3,8 +3,12 @@
  */
 import { Response } from 'express';
 import { Pool } from 'pg';
+import axios from 'axios';
 import { PortfolioController } from '../controllers/portfolio.controller';
 import { AuthRequest } from '../middleware/auth.middleware';
+
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('PortfolioController', () => {
   let portfolioController: PortfolioController;
@@ -33,6 +37,8 @@ describe('PortfolioController', () => {
       json: jest.fn(),
       status: jest.fn().mockReturnThis(),
     };
+
+    mockedAxios.get.mockRejectedValue(new Error('network disabled in tests'));
   });
 
   describe('getPortfolio', () => {
@@ -116,7 +122,7 @@ describe('PortfolioController', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(400);
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: false,
-        error: expect.stringContaining('Missing required fields'),
+        error: expect.stringContaining('Missing or invalid fields'),
       });
     });
 
@@ -136,6 +142,27 @@ describe('PortfolioController', () => {
       await portfolioController.addTransaction(mockRequest as AuthRequest, mockResponse as Response);
 
       expect(mockPool.query).toHaveBeenCalledTimes(3);
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Transaction added successfully',
+      });
+    });
+
+    it('should accept saleDate for sell transactions', async () => {
+      mockRequest.body = {
+        symbol: 'AAPL',
+        quantity: 2,
+        price: 180,
+        type: 'SELL',
+        saleDate: '2024-02-10',
+      };
+
+      (mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      await portfolioController.addTransaction(mockRequest as AuthRequest, mockResponse as Response);
+
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
         message: 'Transaction added successfully',
@@ -205,6 +232,61 @@ describe('PortfolioController', () => {
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
         dividends: mockDividends,
+      });
+    });
+  });
+
+  describe('updateTransaction', () => {
+    it('should update transaction successfully', async () => {
+      mockRequest.params = { transactionId: '1' };
+      mockRequest.body = {
+        symbol: 'AAPL',
+        quantity: 5,
+        price: 120,
+        date: '2024-02-01',
+        type: 'BUY',
+        notes: 'edited',
+      };
+
+      (mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] });
+
+      await portfolioController.updateTransaction(mockRequest as AuthRequest, mockResponse as Response);
+
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Transaction updated successfully',
+      });
+    });
+  });
+
+  describe('deletePosition', () => {
+    it('should remove all transactions for a symbol', async () => {
+      mockRequest.params = { symbol: 'AAPL' };
+      (mockPool.query as jest.Mock).mockResolvedValue({ rows: [{ id: 1 }, { id: 2 }] });
+
+      await portfolioController.deletePosition(mockRequest as AuthRequest, mockResponse as Response);
+
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Position AAPL removed successfully',
+        removedTransactions: 2,
+      });
+    });
+  });
+
+  describe('getPerformance', () => {
+    it('should return performance time series', async () => {
+      const rows = [{ day: '2026-03-01', total_value: '100', invested_value: '90', profit_loss: '10' }];
+      (mockPool.query as jest.Mock).mockResolvedValue({ rows });
+
+      await portfolioController.getPerformance(mockRequest as AuthRequest, mockResponse as Response);
+
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        success: true,
+        days: 90,
+        series: rows,
       });
     });
   });

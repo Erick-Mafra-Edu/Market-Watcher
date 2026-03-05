@@ -108,8 +108,20 @@ app.get('/api/portfolio', authMiddleware, apiLimiter, (req, res) =>
 app.post('/api/portfolio/transaction', authMiddleware, apiLimiter, (req, res) =>
   portfolioController.addTransaction(req, res)
 );
+app.put('/api/portfolio/transaction/:transactionId', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.updateTransaction(req, res)
+);
 app.get('/api/portfolio/transactions', authMiddleware, apiLimiter, (req, res) =>
   portfolioController.getTransactions(req, res)
+);
+app.delete('/api/portfolio/transaction/:transactionId', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.deleteTransaction(req, res)
+);
+app.delete('/api/portfolio/position/:symbol', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.deletePosition(req, res)
+);
+app.get('/api/portfolio/performance', authMiddleware, apiLimiter, (req, res) =>
+  portfolioController.getPerformance(req, res)
 );
 app.get('/api/portfolio/dividends', authMiddleware, apiLimiter, (req, res) =>
   portfolioController.getDividends(req, res)

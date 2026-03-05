@@ -1,0 +1,4 @@
+task-p0-features 78361 logs/agents-round2/task-p0-features.log
+task-communication-tests 78362 logs/agents-round2/task-communication-tests.log
+task-doc-sync 78363 logs/agents-round2/task-doc-sync.log
+task-master-plan 78364 logs/agents-round2/task-master-plan.log

@@ -178,6 +178,43 @@ Adotar **BRAPI como provedor primário** e `yahoo-finance2` como **fallback auto
 
 ---
 
+## ADR-015 — Web App Frontend em React (modular)
+
+- **Status:** Aceita e implementada
+- **Data:** 2026-03-05
+
+### Problema
+
+O frontend do `web-app` estava concentrado em um unico `index.html` monolitico com HTML, CSS e JavaScript inline, dificultando manutencao, reuso e evolucao incremental.
+
+### Alternativas consideradas
+
+1. **Manter frontend em HTML/JS inline**
+   - Pro: sem mudanca de stack.
+   - Contra: alta complexidade de manutencao e baixo reuso.
+
+2. **Migrar para React com estrutura modular por componentes**
+   - Pro: separacao de responsabilidades, reaproveitamento e evolucao incremental.
+   - Contra: adiciona etapa de build client-side.
+
+### Decisao
+
+Adotar **React** no frontend do `web-app`, com organizacao modular em `frontend/src` e bundle gerado para `public/assets` durante o build do servico.
+
+### Motivo da escolha
+
+- Alinha com evolucao incremental do produto.
+- Reduz acoplamento do frontend monolitico.
+- Facilita criacao de componentes por dominio (auth, dashboard, portfolio, watchlist, charts e alerts).
+
+### Consequencias
+
+- `web-app` passa a ter build em duas etapas: server (`tsc`) e client (`esbuild`).
+- Executar o frontend localmente requer gerar bundle (`npm run build:client` ou `npm run build`).
+- Backend Express e contratos de API permanecem inalterados.
+
+---
+
 ## Decisões em Aberto / Pendências Arquiteturais
 
 1. **Correlação notícia ↔ ativo**

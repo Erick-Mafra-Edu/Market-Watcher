@@ -86,7 +86,7 @@ Você pode:
 - Sugerir refatorações
 - Criar testes
 - Melhorar legibilidade
-
+- sempre que for usar docker compose faça primeiro o docker-compose build --no-cache para garantir que a imagem seja construída do zero, evitando problemas de cache
 Você NÃO deve:
 - Introduzir tecnologias não discutidas
 - Alterar arquitetura sem registrar decisão
