@@ -176,6 +176,7 @@ services:
     container_name: market-watcher-web
     environment:
       NODE_ENV: development
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000
       DATABASE_HOST: database
       DATABASE_PORT: 5432
       DATABASE_NAME: ${POSTGRES_DB:-market_watcher}
