@@ -11,6 +11,7 @@ import { WatchlistController } from './controllers/watchlist.controller';
 import { AlertsController } from './controllers/alerts.controller';
 import { NewsController } from './controllers/news.controller';
 import { PortfolioController } from './controllers/portfolio.controller';
+import { AssetsController } from './controllers/assets.controller';
 import { authMiddleware } from './middleware/auth.middleware';
 
 const app = express();
@@ -61,6 +62,7 @@ const watchlistController = new WatchlistController(pool);
 const alertsController = new AlertsController(pool);
 const newsController = new NewsController(pool);
 const portfolioController = new PortfolioController(pool);
+const assetsController = new AssetsController(pool);
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
@@ -99,6 +101,17 @@ app.get('/api/news/stats', authMiddleware, apiLimiter, (req, res) =>
 );
 app.get('/api/news/stock/:symbol', authMiddleware, apiLimiter, (req, res) =>
   newsController.getStockNews(req, res)
+);
+
+// Tracked assets routes (protected and rate limited)
+app.get('/api/assets', authMiddleware, apiLimiter, (req, res) =>
+  assetsController.getAssets(req, res)
+);
+app.post('/api/assets', authMiddleware, apiLimiter, (req, res) =>
+  assetsController.addAsset(req, res)
+);
+app.delete('/api/assets/:symbol', authMiddleware, apiLimiter, (req, res) =>
+  assetsController.removeAsset(req, res)
 );
 
 // Portfolio routes (protected and rate limited)

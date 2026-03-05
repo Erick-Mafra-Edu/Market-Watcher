@@ -128,7 +128,33 @@ ADD COLUMN IF NOT EXISTS source VARCHAR(100);
 ALTER TABLE dividend_history
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
+-- Tracked assets: assets actively monitored for news fetching
+CREATE TABLE IF NOT EXISTS tracked_assets (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(255),
+    asset_type VARCHAR(50) DEFAULT 'stock',
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Default tracked assets to seed the system
+INSERT INTO tracked_assets (symbol, name, asset_type) VALUES
+    ('PETR4', 'Petrobras PN', 'stock'),
+    ('VALE3', 'Vale ON', 'stock'),
+    ('ITUB4', 'Itaú Unibanco PN', 'stock'),
+    ('BBDC4', 'Bradesco PN', 'stock'),
+    ('MGLU3', 'Magazine Luiza ON', 'stock'),
+    ('AAPL', 'Apple Inc.', 'stock'),
+    ('GOOGL', 'Alphabet Inc.', 'stock'),
+    ('MSFT', 'Microsoft Corp.', 'stock'),
+    ('BTC-USD', 'Bitcoin', 'crypto'),
+    ('ETH-USD', 'Ethereum', 'crypto')
+ON CONFLICT (symbol) DO NOTHING;
+
 -- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_tracked_assets_active ON tracked_assets(active);
 CREATE INDEX IF NOT EXISTS idx_user_watchlist_user_id ON user_watchlist(user_id);
 CREATE INDEX IF NOT EXISTS idx_stock_news_stock_id ON stock_news(stock_id);
 CREATE INDEX IF NOT EXISTS idx_stock_news_news_id ON stock_news(news_id);
@@ -158,4 +184,8 @@ CREATE TRIGGER update_stocks_updated_at BEFORE UPDATE ON stocks
 
 DROP TRIGGER IF EXISTS update_dividend_history_updated_at ON dividend_history;
 CREATE TRIGGER update_dividend_history_updated_at BEFORE UPDATE ON dividend_history
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_tracked_assets_updated_at ON tracked_assets;
+CREATE TRIGGER update_tracked_assets_updated_at BEFORE UPDATE ON tracked_assets
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -36,6 +36,7 @@ interface NewsData {
   source: string;
   published_at: string;
   topic: string;
+  related_stock?: string;
 }
 
 interface StockData {
@@ -485,7 +486,26 @@ export class NotifierService {
       );
 
       if (savedNews.rows.length > 0) {
-        await this.linkNewsToMentionedStocks(savedNews.rows[0].id, newsData);
+        const newsId = savedNews.rows[0].id;
+
+        // When the publisher includes a direct asset link, use it first for a
+        // high-confidence stock_news association before falling back to text matching.
+        if (newsData.related_stock) {
+          try {
+            const stockId = await this.getOrCreateStockId(newsData.related_stock);
+            await pool.query(
+              `INSERT INTO stock_news (stock_id, news_id, relevance_score)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (stock_id, news_id) DO UPDATE
+               SET relevance_score = GREATEST(stock_news.relevance_score, EXCLUDED.relevance_score)`,
+              [stockId, newsId, 1.0]
+            );
+          } catch (linkError) {
+            console.error('Error linking news to related_stock:', linkError);
+          }
+        }
+
+        await this.linkNewsToMentionedStocks(newsId, newsData);
       }
     } catch (error) {
       console.error('Error saving news to database:', error);

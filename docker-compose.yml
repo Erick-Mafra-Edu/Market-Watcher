@@ -62,8 +62,16 @@ services:
       RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
       GNEWS_API_KEY: ${GNEWS_API_KEY:-SAMPLE_API_KEY}
       CHECK_INTERVAL: ${GNEWS_CHECK_INTERVAL:-300}
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-market_watcher}
+      DATABASE_USER: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      ASSET_REFRESH_INTERVAL: ${ASSET_REFRESH_INTERVAL:-1800}
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      database:
         condition: service_healthy
     networks:
       - market-watcher-network
