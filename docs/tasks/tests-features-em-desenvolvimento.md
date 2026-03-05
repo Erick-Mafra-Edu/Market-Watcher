@@ -41,16 +41,21 @@ As features abaixo continuam sem suite propria no estado atual:
 
 - Top Movers no dashboard
 - WebSocket para atualizacoes em tempo real
-- Contratos RabbitMQ (producers/consumers)
-- Ack/Nack por fila no notifier (`news_queue`, `price_updates`, `fundamentals_queue`)
-- Integracao message -> persistence (`news_articles`, `stock_news`, `status_invest_data`)
+- Fixtures HTML reais versionadas para regressao do parser StatusInvest
+- Retry/Reconnect do RabbitMQ (todos os servicos)
+- Idempotencia de mensagens (reentrega sem duplicata no banco)
+- Fluxo E2E de alerta multi-canal (SMS/WhatsApp com dados reais)
+
+**Nota:** Os itens `Contratos RabbitMQ (producers/consumers)`, `Ack/Nack por fila no notifier` e
+`Integracao message -> persistence` foram implementados como parte da iteracao P0/P1.
+Consultar `docs/tasks/tests-implementados-e-features-pendentes.md` para o inventario completo.
 
 ## Backlog recomendado (proxima iteracao)
 
-1. Criar `notifier-service/src/index.communication.test.ts` para contrato de payload e ack/nack.
-2. Criar `notifier-service/src/integration/messaging-persistence.integration.test.ts` para fluxo fila -> DB.
-3. Criar fixtures HTML reais para `scraping-worker` e adicionar testes de regressao por snapshot.
-4. Criar `web-app/src/integration/stocks-proxy.integration.test.ts` para contrato `web-app -> api-handler`.
+1. Criar fixtures HTML reais para `scraping-worker` e adicionar testes de regressao por snapshot.
+2. Estender `notifier-service/src/integration/alert-chain.integration.test.ts` para fluxo multi-canal.
+3. Criar `scraping-worker/tests/test_rabbitmq_retry.py` e `gnews-service/tests/test_rabbitmq_retry.py`.
+4. Criar `notifier-service/src/integration/message-idempotency.integration.test.ts`.
 
 ## Definicao de pronto (para remover este documento como pendencia)
 
