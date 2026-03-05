@@ -88,7 +88,40 @@ export class NewsController {
   async getStockNews(req: Request, res: Response): Promise<void> {
     try {
       const { symbol } = req.params;
-      const { limit = 20 } = req.query;
+      const {
+        minRelevance,
+        since,
+        sort = 'published_at',
+        order = 'desc',
+      } = req.query;
+
+      const parsedLimit = Number(req.query.limit ?? 20);
+      const parsedOffset = Number(req.query.offset ?? 0);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 20;
+      const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+      const sortColumn = String(sort).toLowerCase() === 'relevance_score'
+        ? 'sn.relevance_score'
+        : 'na.published_at';
+      const sortDirection = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+      const whereClauses: string[] = ['UPPER(s.symbol) = UPPER($1)'];
+      const params: any[] = [symbol];
+      let paramCount = 2;
+
+      if (typeof minRelevance === 'string' && minRelevance.trim()) {
+        const parsedMinRelevance = Number(minRelevance);
+        if (Number.isFinite(parsedMinRelevance)) {
+          whereClauses.push(`sn.relevance_score >= $${paramCount}`);
+          params.push(parsedMinRelevance);
+          paramCount++;
+        }
+      }
+
+      if (typeof since === 'string' && since.trim()) {
+        whereClauses.push(`na.published_at >= $${paramCount}`);
+        params.push(since.trim());
+        paramCount++;
+      }
 
       const query = `
         SELECT 
@@ -108,12 +141,14 @@ export class NewsController {
         FROM news_articles na
         INNER JOIN stock_news sn ON na.id = sn.news_id
         INNER JOIN stocks s ON sn.stock_id = s.id
-        WHERE s.symbol = $1
-        ORDER BY na.published_at DESC
-        LIMIT $2
+        WHERE ${whereClauses.join(' AND ')}
+        ORDER BY ${sortColumn} ${sortDirection} NULLS LAST, na.published_at DESC
+        LIMIT $${paramCount}
+        OFFSET $${paramCount + 1}
       `;
 
-      const result = await this.pool.query(query, [symbol, limit]);
+      params.push(limit, offset);
+      const result = await this.pool.query(query, params);
 
       res.json({
         success: true,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getNews } from '../../services/api';
+import { getNews, getStockQuote } from '../../services/api';
 import { NewsItem } from '../../types';
 
 interface NewsTabProps {
@@ -7,58 +7,113 @@ interface NewsTabProps {
   onError: (message: string) => void;
 }
 
-const sentimentBadge: Record<string, string> = {
-  positive: 'bg-emerald-100 text-emerald-700',
-  negative: 'bg-red-100 text-red-700',
-  neutral: 'bg-slate-100 text-slate-600',
-};
-
 export function NewsTab({ token, onError }: NewsTabProps) {
   const [items, setItems] = useState<NewsItem[]>([]);
+  const [quoteBySymbol, setQuoteBySymbol] = useState<Record<string, {
+    price: number;
+    changePercent: number;
+    currency?: string;
+  }>>({});
+
+  function getSentimentLabel(sentiment?: NewsItem['sentiment']) {
+    if (sentiment === 'positive') return 'Positiva';
+    if (sentiment === 'negative') return 'Negativa';
+    return 'Neutra';
+  }
+
+  function getSentimentClass(sentiment?: NewsItem['sentiment']) {
+    if (sentiment === 'positive') return 'sentiment-positive';
+    if (sentiment === 'negative') return 'sentiment-negative';
+    return 'sentiment-neutral';
+  }
+
+  function formatPrice(value: number, currency?: string) {
+    const normalized = (currency || 'BRL').toUpperCase() === 'USD' ? 'USD' : 'BRL';
+    const locale = normalized === 'USD' ? 'en-US' : 'pt-BR';
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: normalized,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
 
   useEffect(() => {
-    getNews(token)
-      .then(setItems)
-      .catch((error: any) => onError(error.message || 'Falha ao carregar noticias.'));
+    async function load() {
+      try {
+        const news = await getNews(token);
+        setItems(news);
+
+        const relatedSymbols = Array.from(
+          new Set(
+            news
+              .flatMap((item) => item.related_stocks || [])
+              .map((symbol) => symbol.toUpperCase())
+          )
+        ).slice(0, 20);
+
+        if (relatedSymbols.length === 0) {
+          setQuoteBySymbol({});
+          return;
+        }
+
+        const snapshots = await Promise.all(
+          relatedSymbols.map(async (symbol) => {
+            try {
+              const quote = await getStockQuote(token, symbol);
+              return [
+                symbol,
+                {
+                  price: Number(quote.price || 0),
+                  changePercent: Number(quote.changePercent || 0),
+                  currency: quote.currency,
+                },
+              ] as const;
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        setQuoteBySymbol(Object.fromEntries(snapshots.filter((entry): entry is readonly [string, { price: number; changePercent: number; currency?: string }] => Boolean(entry))));
+      } catch (error: any) {
+        onError(error.message || 'Falha ao carregar noticias.');
+      }
+    }
+
+    load();
   }, [token, onError]);
 
   return (
-    <section className="bg-white/90 rounded-2xl border border-slate-200 shadow-md p-5 backdrop-blur-sm flex flex-col gap-4">
-      <div>
-        <h3 className="font-heading font-bold text-slate-800">Noticias de Mercado</h3>
-        <p className="text-xs text-slate-400 mt-0.5">Acompanhe o fluxo de noticias e abra a fonte original quando necessario.</p>
-      </div>
-
-      {items.length === 0 && <p className="text-sm text-slate-400">Nenhuma noticia encontrada.</p>}
-
+    <section className="card stack">
+      <h3>Noticias de Mercado</h3>
+      <p className="muted tiny">Acompanhe o fluxo de noticias e abra a fonte original quando necessario.</p>
+      {items.length === 0 && <p className="muted">Nenhuma noticia encontrada.</p>}
       {items.map((item) => (
-        <article
-          key={item.id}
-          className="border border-slate-100 rounded-xl px-4 py-3 flex items-start justify-between gap-3 bg-white/70 hover:bg-white transition"
-        >
-          <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <strong className="text-sm text-slate-800">{item.title}</strong>
-              {item.sentiment && (
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${sentimentBadge[item.sentiment] ?? sentimentBadge.neutral}`}>
-                  {item.sentiment}
+        <article key={item.id} className="list-row">
+          <div className="stack-xs">
+            <strong>{item.title}</strong>
+            <p>{item.description || 'Sem descricao.'}</p>
+            <div className="badges-row">
+              <span className={`badge ${getSentimentClass(item.sentiment)}`}>
+                Sentimento: {getSentimentLabel(item.sentiment)}
+              </span>
+              {item.related_stocks && item.related_stocks.length > 0 && (
+                <span className="badge">
+                  Ativo: {item.related_stocks.slice(0, 2).join(', ')}
+                </span>
+              )}
+              {item.related_stocks?.[0] && quoteBySymbol[item.related_stocks[0].toUpperCase()] && (
+                <span
+                  className={`badge ${quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? 'trend-positive' : 'trend-negative'}`}
+                >
+                  {item.related_stocks[0].toUpperCase()} {quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? 'valorizando' : 'caindo'} ({quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? '+' : ''}{quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent.toFixed(2)}%) · {formatPrice(quoteBySymbol[item.related_stocks[0].toUpperCase()].price, quoteBySymbol[item.related_stocks[0].toUpperCase()].currency)}
                 </span>
               )}
             </div>
-            {item.description && (
-              <p className="text-xs text-slate-500 line-clamp-2">{item.description}</p>
-            )}
-            <small className="text-xs text-slate-400">
-              {item.source || 'Fonte desconhecida'} &middot; {new Date(item.published_at).toLocaleString()}
-            </small>
+            <small className="muted">{item.source || 'Fonte desconhecida'} · {new Date(item.published_at).toLocaleString()}</small>
           </div>
           {item.url && (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs font-bold text-[#0a5f53] underline-offset-2 hover:underline whitespace-nowrap mt-0.5"
-            >
+            <a href={item.url} target="_blank" rel="noreferrer">
               Abrir fonte
             </a>
           )}

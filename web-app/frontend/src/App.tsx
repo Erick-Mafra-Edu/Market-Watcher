@@ -4,6 +4,7 @@ import { AuthView } from './components/AuthView';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { ChartsTab } from './components/tabs/ChartsTab';
 import { DashboardTab } from './components/tabs/DashboardTab';
+import { DividendsTab } from './components/tabs/DividendsTab';
 import { NewsTab } from './components/tabs/NewsTab';
 import { PortfolioTab } from './components/tabs/PortfolioTab';
 import { WatchlistTab } from './components/tabs/WatchlistTab';
@@ -57,6 +58,8 @@ export function App() {
         return <NewsTab token={token} onError={(msg) => showMessage(msg, 'error')} />;
       case 'portfolio':
         return <PortfolioTab token={token} onNotify={showMessage} />;
+      case 'dividends':
+        return <DividendsTab token={token} onNotify={showMessage} />;
       case 'watchlist':
         return <WatchlistTab token={token} onNotify={showMessage} />;
       case 'charts':

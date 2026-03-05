@@ -1,4 +1,16 @@
-import { AlertItem, NewsItem, PortfolioPosition, PortfolioSummary, User, WatchlistItem } from '../types';
+import {
+  AlertItem,
+  NewsItem,
+  PortfolioPerformancePoint,
+  PortfolioDividend,
+  PortfolioPosition,
+  PortfolioDividendsFilters,
+  PortfolioSummary,
+  PortfolioTransaction,
+  StockNewsFilters,
+  User,
+  WatchlistItem,
+} from '../types';
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -75,6 +87,34 @@ export async function getNews(token: string, limit = 50): Promise<NewsItem[]> {
   return data.news || [];
 }
 
+export async function getStockNews(token: string, symbol: string, limit = 20): Promise<NewsItem[]> {
+  return getStockNewsWithFilters(token, symbol, { limit });
+}
+
+export async function getStockNewsWithFilters(
+  token: string,
+  symbol: string,
+  filters: StockNewsFilters = {}
+): Promise<NewsItem[]> {
+  const params = new URLSearchParams();
+
+  if (typeof filters.limit === 'number') params.set('limit', String(filters.limit));
+  if (typeof filters.offset === 'number') params.set('offset', String(filters.offset));
+  if (typeof filters.minRelevance === 'number') params.set('minRelevance', String(filters.minRelevance));
+  if (filters.since) params.set('since', filters.since);
+  if (filters.sort) params.set('sort', filters.sort);
+  if (filters.order) params.set('order', filters.order);
+
+  const query = params.toString();
+  const data = await request<{ success: boolean; symbol: string; news: NewsItem[] }>(
+    `/api/news/stock/${encodeURIComponent(symbol)}${query ? `?${query}` : ''}`,
+    { method: 'GET' },
+    token
+  );
+
+  return data.news || [];
+}
+
 export async function getPortfolio(token: string): Promise<{ positions: PortfolioPosition[]; summary: PortfolioSummary }> {
   const data = await request<{
     success: boolean;
@@ -94,6 +134,64 @@ export async function addTransaction(
   }, token);
 }
 
+export async function getPortfolioTransactions(token: string, symbol?: string): Promise<PortfolioTransaction[]> {
+  const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
+  const data = await request<{ success: boolean; transactions: PortfolioTransaction[] }>(
+    `/api/portfolio/transactions${query}`,
+    { method: 'GET' },
+    token
+  );
+
+  return data.transactions || [];
+}
+
+export async function deletePortfolioTransaction(token: string, transactionId: number): Promise<void> {
+  await request(`/api/portfolio/transaction/${transactionId}`, { method: 'DELETE' }, token);
+}
+
+export async function removePortfolioPosition(token: string, symbol: string): Promise<void> {
+  await request(`/api/portfolio/position/${encodeURIComponent(symbol)}`, { method: 'DELETE' }, token);
+}
+
+export async function getPortfolioPerformance(token: string, days = 90): Promise<PortfolioPerformancePoint[]> {
+  const data = await request<{ success: boolean; series: PortfolioPerformancePoint[] }>(
+    `/api/portfolio/performance?days=${days}`,
+    { method: 'GET' },
+    token
+  );
+
+  return data.series || [];
+}
+
+export async function getPortfolioDividends(token: string): Promise<PortfolioDividend[]> {
+  return getPortfolioDividendsWithFilters(token);
+}
+
+export async function getPortfolioDividendsWithFilters(
+  token: string,
+  filters: PortfolioDividendsFilters = {}
+): Promise<PortfolioDividend[]> {
+  const params = new URLSearchParams();
+
+  if (typeof filters.onlyUpcoming === 'boolean') params.set('onlyUpcoming', String(filters.onlyUpcoming));
+  if (filters.fromDate) params.set('fromDate', filters.fromDate);
+  if (filters.toDate) params.set('toDate', filters.toDate);
+  if (filters.symbol) params.set('symbol', filters.symbol);
+  if (typeof filters.limit === 'number') params.set('limit', String(filters.limit));
+  if (typeof filters.offset === 'number') params.set('offset', String(filters.offset));
+  if (filters.sort) params.set('sort', filters.sort);
+  if (filters.order) params.set('order', filters.order);
+
+  const query = params.toString();
+  const data = await request<{ success: boolean; dividends: PortfolioDividend[] }>(
+    `/api/portfolio/dividends${query ? `?${query}` : ''}`,
+    { method: 'GET' },
+    token
+  );
+
+  return data.dividends || [];
+}
+
 export async function getStockHistory(
   token: string,
   symbol: string,
@@ -103,4 +201,11 @@ export async function getStockHistory(
   const query = `period1=${encodeURIComponent(period1)}&period2=${encodeURIComponent(period2)}`;
   const data = await request<any>(`/api/stocks/${encodeURIComponent(symbol)}/history?${query}`, { method: 'GET' }, token);
   return Array.isArray(data) ? data : [];
+}
+
+export async function getStockQuote(
+  token: string,
+  symbol: string
+): Promise<{ symbol: string; price: number; changePercent: number; volume: number; marketCap: number; name?: string; currency?: string }> {
+  return request(`/api/stocks/${encodeURIComponent(symbol)}`, { method: 'GET' }, token);
 }

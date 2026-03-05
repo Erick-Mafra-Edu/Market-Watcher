@@ -16,7 +16,18 @@ export class PortfolioController {
     this.pool = pool;
   }
 
-  private async fetchLiveQuote(symbol: string): Promise<{ price: number; changePercent: number } | null> {
+  private normalizeCurrency(symbol: string, providerCurrency?: string | null): string {
+    const normalizedProviderCurrency = providerCurrency?.toUpperCase();
+
+    if (normalizedProviderCurrency) {
+      return normalizedProviderCurrency;
+    }
+
+    // Keep a simple fallback until all providers expose currency consistently.
+    return symbol.toUpperCase().endsWith('.SA') ? 'BRL' : 'USD';
+  }
+
+  private async fetchLiveQuote(symbol: string): Promise<{ price: number; changePercent: number; currency?: string } | null> {
     try {
       const response = await axios.get(`${API_HANDLER_URL}/api/stock/${symbol}`, {
         timeout: 4000,
@@ -24,6 +35,9 @@ export class PortfolioController {
 
       const price = Number(response.data?.price);
       const changePercent = Number(response.data?.changePercent ?? 0);
+      const currency = typeof response.data?.currency === 'string'
+        ? response.data.currency
+        : undefined;
 
       if (!Number.isFinite(price) || price <= 0) {
         return null;
@@ -32,6 +46,7 @@ export class PortfolioController {
       return {
         price,
         changePercent: Number.isFinite(changePercent) ? changePercent : 0,
+        currency,
       };
     } catch (error) {
       return null;
@@ -131,6 +146,7 @@ export class PortfolioController {
         return {
           symbol: row.symbol,
           name: row.name,
+          currency: this.normalizeCurrency(row.symbol),
           quantity: parseFloat(row.total_quantity),
           avgPurchasePrice,
           avgSellPrice: parseFloat(row.avg_sell_price) || 0,
@@ -149,6 +165,7 @@ export class PortfolioController {
         const liveQuote = await this.fetchLiveQuote(position.symbol);
         const currentPrice = liveQuote?.price ?? position.currentPrice;
         const dailyChange = liveQuote?.changePercent ?? position.dailyChange;
+        const currency = this.normalizeCurrency(position.symbol, liveQuote?.currency ?? position.currency);
         const investedValue = position.avgPurchasePrice * position.quantity;
         const currentValue = currentPrice * position.quantity;
         const profitLoss = currentValue - investedValue;
@@ -158,6 +175,7 @@ export class PortfolioController {
 
         return {
           ...position,
+          currency,
           currentPrice,
           dailyChange,
           currentValue,
@@ -598,6 +616,50 @@ export class PortfolioController {
     try {
       const userId = req.userId;
 
+      const {
+        onlyUpcoming = 'false',
+        fromDate,
+        toDate,
+        symbol,
+        sort = 'ex_date',
+        order = 'desc',
+      } = req.query;
+
+      const parsedLimit = Number(req.query.limit ?? 50);
+      const parsedOffset = Number(req.query.offset ?? 0);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 50;
+      const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+
+      const filterByUpcoming = String(onlyUpcoming).toLowerCase() === 'true';
+      const sortColumn = String(sort).toLowerCase() === 'payment_date' ? 'dh.payment_date' : 'dh.ex_date';
+      const sortDirection = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+      const whereClauses: string[] = ['up.user_id = $1', 'dh.ex_date IS NOT NULL'];
+      const params: any[] = [userId];
+      let paramCount = 2;
+
+      if (typeof symbol === 'string' && symbol.trim()) {
+        whereClauses.push(`s.symbol = $${paramCount}`);
+        params.push(symbol.trim().toUpperCase());
+        paramCount++;
+      }
+
+      if (typeof fromDate === 'string' && fromDate.trim()) {
+        whereClauses.push(`dh.ex_date >= $${paramCount}`);
+        params.push(fromDate.trim());
+        paramCount++;
+      }
+
+      if (typeof toDate === 'string' && toDate.trim()) {
+        whereClauses.push(`dh.ex_date <= $${paramCount}`);
+        params.push(toDate.trim());
+        paramCount++;
+      }
+
+      if (filterByUpcoming) {
+        whereClauses.push('COALESCE(dh.payment_date, dh.ex_date) >= CURRENT_DATE');
+      }
+
       const query = `
         SELECT 
           s.symbol,
@@ -619,15 +681,16 @@ export class PortfolioController {
           ORDER BY updated_at DESC
           LIMIT 1
         ) sid ON true
-        WHERE up.user_id = $1
-        AND dh.ex_date IS NOT NULL
+        WHERE ${whereClauses.join(' AND ')}
         GROUP BY s.id, s.symbol, s.name, dh.id, dh.dividend_amount, dh.ex_date, dh.payment_date, dh.dividend_type, sid.dividend_yield
         HAVING SUM(CASE WHEN up.transaction_type = 'BUY' THEN up.quantity ELSE -up.quantity END) > 0
-        ORDER BY dh.ex_date DESC
-        LIMIT 50
+        ORDER BY ${sortColumn} ${sortDirection} NULLS LAST
+        LIMIT $${paramCount}
+        OFFSET $${paramCount + 1}
       `;
 
-      const result = await this.pool.query(query, [userId]);
+      params.push(limit, offset);
+      const result = await this.pool.query(query, params);
 
       res.json({
         success: true,
