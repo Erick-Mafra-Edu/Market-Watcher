@@ -205,6 +205,63 @@ describe('NotifierService — communication contract tests', () => {
       await expect(service.handleNews(valid)).resolves.not.toThrow();
     });
 
+    it('accepts a market_news payload that includes related_stock', async () => {
+      const withRelatedStock = {
+        title: 'PETR4 Surges on Oil Rally',
+        description: 'Petrobras shares climbed after oil prices hit a 6-month high.',
+        url: 'https://news.example.com/petr4-oil',
+        source: 'Reuters',
+        published_at: new Date().toISOString(),
+        topic: 'PETR4',
+        related_stock: 'PETR4',
+      };
+      await expect(service.handleNews(withRelatedStock)).resolves.not.toThrow();
+    });
+
+    it('related_stock field is optional — payload without it is still valid', async () => {
+      const withoutRelatedStock = {
+        title: 'Fed holds rates steady',
+        description: 'The Federal Reserve kept interest rates unchanged.',
+        url: 'https://news.example.com/fed-rates',
+        source: 'AP',
+        published_at: new Date().toISOString(),
+        topic: 'federal reserve',
+      };
+      await expect(service.handleNews(withoutRelatedStock)).resolves.not.toThrow();
+    });
+
+    it('handleNews is called with related_stock when present in the queue message', async () => {
+      const channel = {
+        assertQueue: jest.fn().mockResolvedValue(undefined),
+        consume: jest.fn().mockResolvedValue(undefined),
+        ack: jest.fn(),
+        nack: jest.fn(),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+
+      (service as any).channel = channel;
+      await service.setupQueues();
+      const newsCallback = channel.consume.mock.calls[0][1];
+
+      const spyHandleNews = jest.spyOn(service, 'handleNews').mockResolvedValue(undefined);
+
+      const msgWithRelatedStock = {
+        title: 'VALE3 hit by iron ore slump',
+        description: 'Vale shares fell as iron ore futures declined.',
+        url: 'https://news.example.com/vale3-iron',
+        source: 'Bloomberg',
+        published_at: new Date().toISOString(),
+        topic: 'VALE3',
+        related_stock: 'VALE3',
+      };
+
+      await newsCallback({ content: Buffer.from(JSON.stringify(msgWithRelatedStock)) });
+
+      expect(spyHandleNews).toHaveBeenCalledWith(
+        expect.objectContaining({ related_stock: 'VALE3' }),
+      );
+    });
+
     it('contract includes all required fields', () => {
       const requiredFields: string[] = [
         'title',
