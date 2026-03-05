@@ -10,6 +10,7 @@
  *
  * Covered paths:
  * - market_news  →  news_articles  (handleNews)
+ * - market_news with related_stock  →  stock_news  (handleNews + related_stock)
  * - fundamental_data  →  status_invest_data  (handleFundamentalsUpdate)
  */
 
@@ -114,6 +115,110 @@ describe('NotifierService — messaging → persistence integration', () => {
 
       const firstCall = mockQuery.mock.calls[0];
       expect(firstCall[0]).toMatch(/ON CONFLICT/i);
+    });
+  });
+
+  // =========================================================================
+  // market_news with related_stock → stock_news
+  // =========================================================================
+
+  describe('handleNews with related_stock persists to stock_news', () => {
+    const newsWithRelatedStock = {
+      title: 'PETR4 surges after oil rally',
+      description: 'Petrobras shares rose sharply.',
+      url: 'https://news.example.com/petr4-oil-rally',
+      source: 'Bloomberg',
+      published_at: '2026-03-05T10:00:00.000Z',
+      topic: 'PETR4',
+      related_stock: 'PETR4',
+    };
+
+    it('inserts a row in stock_news with relevance_score 1.0 when related_stock is supplied', async () => {
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 99 }]))  // INSERT news_articles → id=99
+        .mockResolvedValueOnce(asQueryResponse([{ id: 7 }]))   // getOrCreateStockId SELECT → id=7
+        .mockResolvedValue(asQueryResponse([]));                // subsequent queries
+
+      await service.handleNews(newsWithRelatedStock);
+
+      const stockNewsCall = mockQuery.mock.calls.find(
+        ([sql]: [string]) =>
+          typeof sql === 'string' && /INSERT INTO stock_news/i.test(sql),
+      );
+
+      expect(stockNewsCall).toBeDefined();
+      const params: unknown[] = stockNewsCall![1];
+      // params: stock_id, news_id, relevance_score
+      expect(params[0]).toBe(7);   // stock_id from getOrCreateStockId
+      expect(params[1]).toBe(99);  // news_id from INSERT news_articles
+      expect(params[2]).toBe(1.0); // high-confidence direct link
+    });
+
+    it('uses ON CONFLICT to upsert the stock_news link', async () => {
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 50 }])) // INSERT news_articles
+        .mockResolvedValueOnce(asQueryResponse([{ id: 8 }]))  // getOrCreateStockId
+        .mockResolvedValue(asQueryResponse([]));
+
+      await service.handleNews(newsWithRelatedStock);
+
+      const stockNewsCall = mockQuery.mock.calls.find(
+        ([sql]: [string]) =>
+          typeof sql === 'string' && /INSERT INTO stock_news/i.test(sql),
+      );
+
+      expect(stockNewsCall![0]).toMatch(/ON CONFLICT/i);
+    });
+
+    it('creates or reuses the stock record for the related_stock symbol', async () => {
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 60 }])) // INSERT news_articles
+        .mockResolvedValueOnce(asQueryResponse([{ id: 12 }])) // getOrCreateStockId SELECT
+        .mockResolvedValue(asQueryResponse([]));
+
+      await service.handleNews(newsWithRelatedStock);
+
+      // The first query after the news_articles INSERT should look up the stock
+      const stockLookup = mockQuery.mock.calls[1];
+      expect(stockLookup[0]).toMatch(/stocks/i);
+      expect(stockLookup[1]).toContain('PETR4');
+    });
+
+    it('does NOT insert a stock_news row when related_stock is absent', async () => {
+      const newsWithoutRelatedStock = {
+        title: 'General market update',
+        description: 'Markets rallied today.',
+        url: 'https://news.example.com/market-update',
+        source: 'AP',
+        published_at: '2026-03-05T12:00:00.000Z',
+        topic: 'stock market',
+        // no related_stock
+      };
+
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 70 }])) // INSERT news_articles
+        .mockResolvedValue(asQueryResponse([]));
+
+      await service.handleNews(newsWithoutRelatedStock);
+
+      const stockNewsCall = mockQuery.mock.calls.find(
+        ([sql]: [string]) =>
+          typeof sql === 'string' && /INSERT INTO stock_news/i.test(sql),
+      );
+      // Without related_stock, stock_news insertions only occur through
+      // text-based symbol matching. Since this payload contains no stock
+      // symbols in the text, no insertion is expected.
+      expect(stockNewsCall).toBeUndefined();
+    });
+
+    it('does not throw even if the stock_news insert fails', async () => {
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 80 }]))  // INSERT news_articles
+        .mockResolvedValueOnce(asQueryResponse([{ id: 9 }]))   // getOrCreateStockId SELECT
+        .mockRejectedValueOnce(new Error('DB constraint error')) // INSERT stock_news fails
+        .mockResolvedValue(asQueryResponse([]));               // remaining queries
+
+      await expect(service.handleNews(newsWithRelatedStock)).resolves.not.toThrow();
     });
   });
 
