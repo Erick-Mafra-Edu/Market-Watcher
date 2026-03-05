@@ -16,6 +16,12 @@ interface MessageState {
   type: MessageType;
 }
 
+const flashClasses: Record<MessageType, string> = {
+  success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  error: 'bg-red-50 text-red-700 border-red-200',
+  info: 'bg-sky-50 text-sky-700 border-sky-200',
+};
+
 export function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [user, setUser] = useState<User | null>(null);
@@ -63,8 +69,14 @@ export function App() {
   }, [activeTab, token, showMessage]);
 
   return (
-    <main className="container">
-      {message && <div className={`flash ${message.type}`}>{message.text}</div>}
+    <main className="max-w-[1240px] mx-auto px-6 py-6">
+      {message && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-xl font-semibold border text-sm animate-rise-in-fast ${flashClasses[message.type]}`}
+        >
+          {message.text}
+        </div>
+      )}
 
       {!token && <AuthView onAuthenticated={handleAuth} onMessage={showMessage} />}
 

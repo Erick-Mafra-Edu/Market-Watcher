@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+    color: #1d2d35;
+    background:
+      radial-gradient(circle at 10% 0%, rgba(240, 138, 36, 0.18) 0, transparent 30%),
+      radial-gradient(circle at 95% 15%, rgba(15, 123, 108, 0.2) 0, transparent 28%),
+      linear-gradient(155deg, #fdf9f2 0%, #f2ead8 100%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3,
+  strong {
+    font-family: 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* Stat cards with branded gradient + texture */
+  .stat-card {
+    @apply flex flex-col gap-2 rounded-2xl p-4 text-white;
+    background:
+      linear-gradient(150deg, #117464, #0c5a4f 65%),
+      repeating-linear-gradient(
+        -35deg,
+        rgba(255, 255, 255, 0.11) 0,
+        rgba(255, 255, 255, 0.11) 8px,
+        rgba(255, 255, 255, 0.02) 8px,
+        rgba(255, 255, 255, 0.02) 16px
+      );
+    animation: rise-in 380ms ease both;
+  }
+
+  .stat-card strong {
+    @apply text-xl;
+  }
+}

@@ -54,42 +54,62 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
   }, [token, onError]);
 
   if (loading) {
-    return <div className="card">Carregando dashboard...</div>;
+    return (
+      <div className="bg-white/90 rounded-2xl border border-slate-200 shadow-md p-6 text-slate-500 text-sm animate-pulse">
+        Carregando dashboard...
+      </div>
+    );
   }
 
+  const plPositive = state.totalProfitLoss >= 0;
+
   return (
-    <section className="stack-lg">
-      <div className="stats-grid">
+    <section className="flex flex-col gap-5">
+      {/* Stats grid */}
+      <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(185px,1fr))]">
         <article className="stat-card">
-          <span>Valor Atual</span>
-          <strong>${state.totalCurrent.toFixed(2)}</strong>
+          <span className="text-sm text-teal-100">Valor Atual</span>
+          <strong className="text-xl">${state.totalCurrent.toFixed(2)}</strong>
         </article>
         <article className="stat-card">
-          <span>Lucro/Prejuizo</span>
-          <strong>${state.totalProfitLoss.toFixed(2)}</strong>
+          <span className="text-sm text-teal-100">Lucro/Prejuizo</span>
+          <strong className={`text-xl ${plPositive ? 'text-emerald-200' : 'text-red-300'}`}>
+            {plPositive ? '+' : ''}${state.totalProfitLoss.toFixed(2)}
+          </strong>
         </article>
         <article className="stat-card">
-          <span>Watchlist</span>
-          <strong>{state.watchlistCount}</strong>
+          <span className="text-sm text-teal-100">Watchlist</span>
+          <strong className="text-xl">{state.watchlistCount}</strong>
         </article>
         <article className="stat-card">
-          <span>Alertas Nao Lidos</span>
-          <strong>{state.unreadAlerts}</strong>
+          <span className="text-sm text-teal-100">Alertas Nao Lidos</span>
+          <strong className="text-xl">{state.unreadAlerts}</strong>
         </article>
       </div>
 
-      <div className="card stack">
-        <h3>Noticias Recentes</h3>
-        <p className="muted tiny">Ultimas publicacoes relevantes para o seu monitoramento.</p>
-        {state.news.length === 0 && <p className="muted">Sem noticias recentes.</p>}
+      {/* Recent news */}
+      <div className="bg-white/90 rounded-2xl border border-slate-200 shadow-md p-5 backdrop-blur-sm flex flex-col gap-3">
+        <div>
+          <h3 className="font-heading font-bold text-slate-800">Noticias Recentes</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Ultimas publicacoes relevantes para o seu monitoramento.</p>
+        </div>
+        {state.news.length === 0 && <p className="text-sm text-slate-400">Sem noticias recentes.</p>}
         {state.news.map((item) => (
-          <article key={item.id} className="list-row">
+          <article
+            key={item.id}
+            className="border border-slate-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white/70 hover:bg-white transition"
+          >
             <div>
-              <strong>{item.title}</strong>
-              <p className="muted tiny">{new Date(item.published_at).toLocaleString()}</p>
+              <strong className="text-sm text-slate-800">{item.title}</strong>
+              <p className="text-xs text-slate-400 mt-0.5">{new Date(item.published_at).toLocaleString()}</p>
             </div>
             {item.url && (
-              <a href={item.url} target="_blank" rel="noreferrer">
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-bold text-[#0a5f53] underline-offset-2 hover:underline whitespace-nowrap"
+              >
                 Abrir
               </a>
             )}
