@@ -52,6 +52,16 @@ export class ApiHandler {
     this.setupRoutes();
   }
 
+  private handleUpstreamError(res: express.Response, context: string, error: any): void {
+    console.error(context, error);
+    const isUpstreamFailure = error instanceof SyntaxError || error?.type === 'invalid-json';
+    const status = isUpstreamFailure ? 503 : 500;
+    const message = isUpstreamFailure
+      ? 'Upstream data source returned an invalid response'
+      : error.message;
+    res.status(status).json({ error: message });
+  }
+
   private setupRoutes(): void {
     this.app.get('/health', (req, res) => {
       res.json({ status: 'ok', service: 'api-handler' });
@@ -64,8 +74,7 @@ export class ApiHandler {
         const quote = await this.fetchStockQuote(symbol);
         res.json(quote);
       } catch (error: any) {
-        console.error('Error fetching stock:', error);
-        res.status(500).json({ error: error.message });
+        this.handleUpstreamError(res, 'Error fetching stock:', error);
       }
     });
 
@@ -86,8 +95,7 @@ export class ApiHandler {
 
         res.json(history);
       } catch (error: any) {
-        console.error('Error fetching history:', error);
-        res.status(500).json({ error: error.message });
+        this.handleUpstreamError(res, 'Error fetching history:', error);
       }
     });
   }

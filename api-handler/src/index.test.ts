@@ -150,5 +150,31 @@ describe('ApiHandler', () => {
     expect(mockBrapiInstance.fetchHistory).toHaveBeenCalled();
     expect(mockYahooInstance.fetchHistory).toHaveBeenCalledWith('AAPL', '2026-01-01', '2026-01-31');
   });
+
+  it('should return 503 when upstream returns invalid JSON (SyntaxError)', async () => {
+    mockedYahoo.quote.mockRejectedValue(
+      new SyntaxError('Unexpected token T in JSON at position 0')
+    );
+
+    const handler = new ApiHandler();
+    const app = handler.getApp();
+
+    const response = await request(app).get('/api/stock/AAPL');
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('Upstream data source returned an invalid response');
+  });
+
+  it('should return 500 for non-upstream errors on /api/stock/:symbol', async () => {
+    mockedYahoo.quote.mockRejectedValue(new Error('Internal error'));
+
+    const handler = new ApiHandler();
+    const app = handler.getApp();
+
+    const response = await request(app).get('/api/stock/AAPL');
+
+    expect(response.status).toBe(500);
+    expect(response.body.error).toBe('Internal error');
+  });
 });
 
