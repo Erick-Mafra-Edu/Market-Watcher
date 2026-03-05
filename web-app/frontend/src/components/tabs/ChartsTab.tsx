@@ -29,6 +29,9 @@ function compact(value: number) {
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(value);
 }
 
+const inputCls =
+  'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#0f7b6c]/30 focus:border-[#0f7b6c] transition';
+
 export function ChartsTab({ token, onNotify }: ChartsTabProps) {
   const [symbol, setSymbol] = useState('');
   const [period1, setPeriod1] = useState('');
@@ -131,37 +134,85 @@ export function ChartsTab({ token, onNotify }: ChartsTabProps) {
   }
 
   return (
-    <section className="stack-lg">
-      <form className="card form-grid-4" onSubmit={loadChart}>
-        <h3>Grafico Historico</h3>
-        <p className="muted tiny">Compare movimento de preco e volume no periodo escolhido.</p>
-        <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="Simbolo" required />
-        <input type="date" value={period1} onChange={(e) => setPeriod1(e.target.value)} required />
-        <input type="date" value={period2} onChange={(e) => setPeriod2(e.target.value)} required />
-        <button className="btn btn-primary" type="submit">Atualizar</button>
+    <section className="flex flex-col gap-5">
+      {/* Controls */}
+      <form
+        className="bg-white/90 rounded-2xl border border-slate-200 shadow-md p-5 backdrop-blur-sm flex flex-col gap-4"
+        onSubmit={loadChart}
+      >
+        <div>
+          <h3 className="font-heading font-bold text-slate-800">Grafico Historico</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Compare movimento de preco e volume no periodo escolhido.</p>
+        </div>
+        <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(165px,1fr))]">
+          <input
+            className={inputCls}
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+            placeholder="Simbolo"
+            required
+          />
+          <input className={inputCls} type="date" value={period1} onChange={(e) => setPeriod1(e.target.value)} required />
+          <input className={inputCls} type="date" value={period2} onChange={(e) => setPeriod2(e.target.value)} required />
+          <button
+            className="px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-[#0f7b6c] to-[#0a5f53] shadow-md shadow-teal-200/40 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer"
+            type="submit"
+          >
+            Atualizar
+          </button>
+        </div>
       </form>
 
+      {/* Quick symbol shortcuts */}
       {quick.length > 0 && (
-        <div className="quick-row">
+        <div className="flex flex-wrap gap-2">
           {quick.map((item) => (
-            <button key={item} className="btn" onClick={() => setSymbol(item)}>
+            <button
+              key={item}
+              onClick={() => setSymbol(item)}
+              className={`px-3 py-1.5 rounded-xl font-semibold text-xs cursor-pointer transition-all duration-150 border ${
+                symbol === item
+                  ? 'bg-gradient-to-br from-[#0f7b6c] to-[#0a5f53] text-white border-transparent shadow-md shadow-teal-200/40'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-[#0f7b6c]'
+              }`}
+            >
               {item}
             </button>
           ))}
         </div>
       )}
 
+      {/* Summary stats */}
       {summary && (
-        <div className="stats-grid">
-          <article className="stat-card"><span>Ultimo Fechamento</span><strong>${summary.last.toFixed(2)}</strong></article>
-          <article className="stat-card"><span>Variacao do Periodo</span><strong>{summary.variation.toFixed(2)}%</strong></article>
-          <article className="stat-card"><span>Maximo / Minimo</span><strong>${summary.high.toFixed(2)} / ${summary.low.toFixed(2)}</strong></article>
-          <article className="stat-card"><span>Volume Medio</span><strong>{compact(summary.avgVolume)}</strong></article>
+        <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(185px,1fr))]">
+          <article className="stat-card">
+            <span className="text-sm text-teal-100">Ultimo Fechamento</span>
+            <strong>${summary.last.toFixed(2)}</strong>
+          </article>
+          <article className="stat-card">
+            <span className="text-sm text-teal-100">Variacao do Periodo</span>
+            <strong className={summary.variation >= 0 ? 'text-emerald-200' : 'text-red-300'}>
+              {summary.variation >= 0 ? '+' : ''}{summary.variation.toFixed(2)}%
+            </strong>
+          </article>
+          <article className="stat-card">
+            <span className="text-sm text-teal-100">Maximo / Minimo</span>
+            <strong>${summary.high.toFixed(2)} / ${summary.low.toFixed(2)}</strong>
+          </article>
+          <article className="stat-card">
+            <span className="text-sm text-teal-100">Volume Medio</span>
+            <strong>{compact(summary.avgVolume)}</strong>
+          </article>
         </div>
       )}
 
-      <div className="card chart-box"><canvas ref={priceCanvas} /></div>
-      <div className="card chart-box"><canvas ref={volumeCanvas} /></div>
+      {/* Charts */}
+      <div className="bg-white/90 rounded-2xl border border-slate-200 shadow-md p-5 backdrop-blur-sm h-80">
+        <canvas ref={priceCanvas} />
+      </div>
+      <div className="bg-white/90 rounded-2xl border border-slate-200 shadow-md p-5 backdrop-blur-sm h-48">
+        <canvas ref={volumeCanvas} />
+      </div>
     </section>
   );
 }
