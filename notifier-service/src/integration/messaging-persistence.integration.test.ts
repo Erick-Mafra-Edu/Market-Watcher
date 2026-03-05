@@ -191,4 +191,57 @@ describe('NotifierService — messaging → persistence integration', () => {
       expect(insertCall).toBeDefined();
     });
   });
+
+  // =========================================================================
+  // dividend_events → dividend_history
+  // =========================================================================
+
+  describe('handleDividendUpdate persists to dividend_history', () => {
+    const dividendPayload = {
+      symbol: 'ITUB4',
+      dividend_amount: 0.72,
+      ex_date: '2026-03-20',
+      payment_date: '2026-03-31',
+      dividend_type: 'DIVIDEND',
+      source: 'statusinvest',
+      scraped_at: '2026-03-05T09:00:00.000Z',
+    };
+
+    it('upserts a row in dividend_history with the correct fields', async () => {
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 15 }])) // getOrCreateStockId SELECT
+        .mockResolvedValue(asQueryResponse([]));               // remaining queries
+
+      await service.handleDividendUpdate(dividendPayload as any);
+
+      const upsertCall = mockQuery.mock.calls.find(
+        ([sql]: [string]) =>
+          typeof sql === 'string' && /INSERT INTO dividend_history/i.test(sql),
+      );
+
+      expect(upsertCall).toBeDefined();
+      expect(upsertCall![0]).toMatch(/ON CONFLICT/i);
+      const params: unknown[] = upsertCall![1];
+
+      expect(params[0]).toBe(15);
+      expect(params[1]).toBe(dividendPayload.dividend_amount);
+      expect(params[2]).toBe(dividendPayload.ex_date);
+      expect(params[3]).toBe(dividendPayload.payment_date);
+      expect(params[4]).toBe(dividendPayload.dividend_type);
+      expect(params[5]).toBe(dividendPayload.source);
+    });
+
+    it('normalises the symbol to uppercase before persisting', async () => {
+      const lowerSymbolPayload = { ...dividendPayload, symbol: 'itub4' };
+
+      mockQuery
+        .mockResolvedValueOnce(asQueryResponse([{ id: 16 }]))
+        .mockResolvedValue(asQueryResponse([]));
+
+      await service.handleDividendUpdate(lowerSymbolPayload as any);
+
+      const firstCall = mockQuery.mock.calls[0];
+      expect(firstCall[1]).toContain('ITUB4');
+    });
+  });
 });

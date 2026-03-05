@@ -45,6 +45,7 @@ export class YahooFinanceProvider implements StockProvider {
       volume: quote.regularMarketVolume ?? 0,
       marketCap: quote.marketCap ?? 0,
       name: quote.longName || quote.shortName,
+      currency: quote.currency || quote.financialCurrency,
     };
   }
 

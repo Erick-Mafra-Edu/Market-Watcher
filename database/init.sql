@@ -115,9 +115,18 @@ CREATE TABLE IF NOT EXISTS dividend_history (
     ex_date DATE NOT NULL,
     payment_date DATE,
     dividend_type VARCHAR(50), -- Regular, Special, etc.
+    source VARCHAR(100),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(stock_id, ex_date)
 );
+
+-- Backward-compatible migration for existing databases
+ALTER TABLE dividend_history
+ADD COLUMN IF NOT EXISTS source VARCHAR(100);
+
+ALTER TABLE dividend_history
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_user_watchlist_user_id ON user_watchlist(user_id);
@@ -145,4 +154,8 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_stocks_updated_at BEFORE UPDATE ON stocks
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_dividend_history_updated_at ON dividend_history;
+CREATE TRIGGER update_dividend_history_updated_at BEFORE UPDATE ON dividend_history
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

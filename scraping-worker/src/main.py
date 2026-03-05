@@ -7,8 +7,8 @@ import time
 import json
 import logging
 import re
-from datetime import datetime
-from typing import Dict, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 import requests
 from bs4 import BeautifulSoup
 import pika
@@ -25,6 +25,8 @@ RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'admin')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'admin')
 CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '300'))
+BRAPI_TOKEN = os.getenv('BRAPI_TOKEN')
+BRAPI_BASE_URL = os.getenv('BRAPI_BASE_URL', 'https://brapi.dev/api')
 
 # Brazilian stocks to monitor
 BRAZILIAN_STOCKS = [
@@ -78,11 +80,21 @@ class StatusInvestScraper:
                     exchange_type='fanout',
                     durable=True
                 )
+                self.channel.exchange_declare(
+                    exchange='dividend_events',
+                    exchange_type='fanout',
+                    durable=True
+                )
                 
                 self.channel.queue_declare(queue='fundamentals_queue', durable=True)
                 self.channel.queue_bind(
                     exchange='fundamental_data',
                     queue='fundamentals_queue'
+                )
+                self.channel.queue_declare(queue='dividends_queue', durable=True)
+                self.channel.queue_bind(
+                    exchange='dividend_events',
+                    queue='dividends_queue'
                 )
                 
                 logger.info("Successfully connected to RabbitMQ")
@@ -116,7 +128,7 @@ class StatusInvestScraper:
                 'p_l': self._extract_indicator(soup, 'p-l'),
                 'roe': self._extract_indicator(soup, 'roe'),
                 'liquidity': self._extract_indicator(soup, 'liquidity'),
-                'scraped_at': datetime.utcnow().isoformat()
+                'scraped_at': datetime.now(timezone.utc).isoformat()
             }
             
             logger.info(f"Successfully scraped data for {symbol}")
@@ -218,6 +230,270 @@ class StatusInvestScraper:
         except Exception as e:
             logger.error(f"Error extracting {indicator_name}: {e}")
             return None
+
+    def _normalize_date(self, raw_value: str) -> Optional[str]:
+        """Normalize date strings to YYYY-MM-DD."""
+        if not raw_value:
+            return None
+
+        for pattern in ['%d/%m/%Y', '%Y-%m-%d']:
+            try:
+                return datetime.strptime(raw_value.strip(), pattern).date().isoformat()
+            except ValueError:
+                continue
+
+        return None
+
+    def _infer_dividend_type(self, raw_text: str) -> str:
+        """Infer dividend type from free text snippets."""
+        lowered = (raw_text or '').lower()
+        if 'jcp' in lowered or 'jscp' in lowered:
+            return 'JCP'
+        if 'rendimento' in lowered:
+            return 'INCOME'
+        if 'dividendo' in lowered or 'dividend' in lowered:
+            return 'DIVIDEND'
+        return 'UNKNOWN'
+
+    def _extract_dividend_events(self, soup: BeautifulSoup, symbol: str) -> List[Dict]:
+        """Extract dividend events from common tabular rows in the page."""
+        events: List[Dict] = []
+        seen_keys = set()
+
+        # Typical pages expose dividend history in table rows.
+        for row in soup.find_all('tr'):
+            row_text = row.get_text(' ', strip=True)
+            if not row_text:
+                continue
+
+            lowered = row_text.lower()
+            if not any(term in lowered for term in ['dividendo', 'dividend', 'jcp', 'provento', 'rendimento']):
+                continue
+
+            dates = re.findall(r'\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b', row_text)
+            if not dates:
+                continue
+
+            ex_date = self._normalize_date(dates[0])
+            if not ex_date:
+                continue
+
+            payment_date = self._normalize_date(dates[1]) if len(dates) > 1 else None
+
+            amount_tokens = re.findall(r'(?:R\$\s*)?\d+[\.,]\d{1,6}', row_text)
+            dividend_amount = None
+            for token in amount_tokens:
+                parsed_amount = self._normalize_numeric(token)
+                if parsed_amount is not None and 0 < parsed_amount < 1000:
+                    dividend_amount = parsed_amount
+                    break
+
+            if dividend_amount is None:
+                continue
+
+            dividend_type = self._infer_dividend_type(row_text)
+            event_key = (symbol, ex_date, dividend_type)
+            if event_key in seen_keys:
+                continue
+
+            seen_keys.add(event_key)
+            events.append({
+                'symbol': symbol,
+                'dividend_amount': dividend_amount,
+                'ex_date': ex_date,
+                'payment_date': payment_date,
+                'dividend_type': dividend_type,
+                'source': 'statusinvest',
+                'scraped_at': datetime.now(timezone.utc).isoformat(),
+            })
+
+        return events
+
+    def _normalize_dividend_event(self, raw_event: Dict, symbol: str, source: str) -> Optional[Dict]:
+        """Normalize event-like dicts from multiple providers into a common format."""
+        amount_candidates = [
+            raw_event.get('dividend_amount'),
+            raw_event.get('amount'),
+            raw_event.get('value'),
+            raw_event.get('cashDividends'),
+            raw_event.get('rate'),
+            raw_event.get('valor'),
+        ]
+        dividend_amount = None
+        for candidate in amount_candidates:
+            parsed_amount = self._normalize_numeric(candidate)
+            if parsed_amount is not None:
+                dividend_amount = parsed_amount
+                break
+
+        ex_date_candidates = [
+            raw_event.get('ex_date'),
+            raw_event.get('exDate'),
+            raw_event.get('exDividendDate'),
+            raw_event.get('date'),
+            raw_event.get('dataCom'),
+        ]
+        ex_date = None
+        for candidate in ex_date_candidates:
+            parsed_ex_date = self._normalize_date(candidate)
+            if parsed_ex_date:
+                ex_date = parsed_ex_date
+                break
+
+        payment_date_candidates = [
+            raw_event.get('payment_date'),
+            raw_event.get('paymentDate'),
+            raw_event.get('payDate'),
+            raw_event.get('dataPagamento'),
+        ]
+        payment_date = None
+        for candidate in payment_date_candidates:
+            parsed_payment_date = self._normalize_date(candidate)
+            if parsed_payment_date:
+                payment_date = parsed_payment_date
+                break
+
+        type_candidates = [
+            raw_event.get('dividend_type'),
+            raw_event.get('type'),
+            raw_event.get('label'),
+            raw_event.get('description'),
+        ]
+        inferred_type = next((self._infer_dividend_type(str(v)) for v in type_candidates if v), 'UNKNOWN')
+
+        if dividend_amount is None or not ex_date:
+            return None
+
+        return {
+            'symbol': symbol,
+            'dividend_amount': dividend_amount,
+            'ex_date': ex_date,
+            'payment_date': payment_date,
+            'dividend_type': inferred_type,
+            'source': source,
+            'scraped_at': datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _extract_brapi_dividend_events(self, payload: Dict, symbol: str) -> List[Dict]:
+        """Extract dividend events from BRAPI quote payload."""
+        events: List[Dict] = []
+        results = payload.get('results') if isinstance(payload, dict) else None
+
+        if not isinstance(results, list) or len(results) == 0:
+            return events
+
+        result = results[0]
+        if not isinstance(result, dict):
+            return events
+
+        candidate_lists: List[List[Dict]] = []
+        direct_keys = ['dividendsData', 'dividends', 'cashDividends', 'stockDividends']
+
+        for key in direct_keys:
+            value = result.get(key)
+            if isinstance(value, list):
+                candidate_lists.append(value)
+
+        if isinstance(result.get('dividendsData'), dict):
+            nested = result['dividendsData']
+            for key in ['cashDividends', 'stockDividends', 'allDividends', 'results']:
+                value = nested.get(key)
+                if isinstance(value, list):
+                    candidate_lists.append(value)
+
+        for candidate_list in candidate_lists:
+            for raw_event in candidate_list:
+                if not isinstance(raw_event, dict):
+                    continue
+
+                normalized = self._normalize_dividend_event(raw_event, symbol, 'brapi')
+                if normalized:
+                    events.append(normalized)
+
+        return events
+
+    def fetch_brapi_dividend_events(self, symbol: str) -> List[Dict]:
+        """Fetch dividend events from BRAPI as a complementary source."""
+        try:
+            params = {
+                'modules': 'dividends',
+                'range': '5y',
+                'interval': '1d',
+            }
+
+            if BRAPI_TOKEN:
+                params['token'] = BRAPI_TOKEN
+
+            response = self.session.get(
+                f"{BRAPI_BASE_URL}/quote/{symbol}",
+                params=params,
+                timeout=10
+            )
+            response.raise_for_status()
+
+            payload = response.json()
+            events = self._extract_brapi_dividend_events(payload, symbol)
+
+            if events:
+                logger.info(f"Fetched {len(events)} BRAPI dividend events for {symbol}")
+            else:
+                logger.info(f"No BRAPI dividend events found for {symbol}")
+
+            return events
+        except requests.RequestException as e:
+            logger.error(f"Error fetching BRAPI dividend events for {symbol}: {e}")
+            return []
+        except ValueError as e:
+            logger.error(f"Error parsing BRAPI response for {symbol}: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching BRAPI dividend events for {symbol}: {e}")
+            return []
+
+    def merge_dividend_events(self, *event_lists: List[Dict]) -> List[Dict]:
+        """Merge and deduplicate events from multiple sources.
+
+        Dedup key: symbol + ex_date + dividend_type. When duplicated, BRAPI is preferred.
+        """
+        by_key: Dict[tuple, Dict] = {}
+
+        def score(event: Dict) -> int:
+            base = 0
+            base += 2 if event.get('payment_date') else 0
+            base += 1 if event.get('dividend_amount') is not None else 0
+            base += 1 if event.get('source') == 'brapi' else 0
+            return base
+
+        for events in event_lists:
+            for event in events:
+                key = (event.get('symbol'), event.get('ex_date'), event.get('dividend_type'))
+                if key not in by_key or score(event) > score(by_key[key]):
+                    by_key[key] = event
+
+        return list(by_key.values())
+
+    def scrape_dividend_events(self, symbol: str) -> List[Dict]:
+        """Scrape dividend events for a stock from StatusInvest."""
+        try:
+            url = f"{self.BASE_URL}/{symbol.lower()}"
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            events = self._extract_dividend_events(soup, symbol)
+
+            if events:
+                logger.info(f"Extracted {len(events)} dividend events for {symbol}")
+            else:
+                logger.info(f"No dividend events found for {symbol}")
+
+            return events
+        except requests.RequestException as e:
+            logger.error(f"Error scraping dividend events for {symbol}: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error scraping dividend events for {symbol}: {e}")
+            return []
     
     def publish_data(self, data: Dict):
         """Publish fundamental data to RabbitMQ"""
@@ -237,6 +513,29 @@ class StatusInvestScraper:
             logger.error(f"Error publishing data: {e}")
             # Reconnect if connection was lost
             self.connect_rabbitmq()
+
+    def publish_dividend_events(self, events: List[Dict]):
+        """Publish dividend event messages to RabbitMQ."""
+        if not events:
+            return
+
+        try:
+            for event in events:
+                self.channel.basic_publish(
+                    exchange='dividend_events',
+                    routing_key='',
+                    body=json.dumps(event),
+                    properties=pika.BasicProperties(
+                        delivery_mode=2,
+                        content_type='application/json'
+                    )
+                )
+
+            symbol = events[0].get('symbol', 'N/A')
+            logger.info(f"Published {len(events)} dividend events for {symbol}")
+        except Exception as e:
+            logger.error(f"Error publishing dividend events: {e}")
+            self.connect_rabbitmq()
     
     def run(self):
         """Main service loop"""
@@ -251,6 +550,14 @@ class StatusInvestScraper:
                     
                     if data:
                         self.publish_data(data)
+
+                    statusinvest_dividend_events = self.scrape_dividend_events(symbol)
+                    brapi_dividend_events = self.fetch_brapi_dividend_events(symbol)
+                    merged_dividend_events = self.merge_dividend_events(
+                        statusinvest_dividend_events,
+                        brapi_dividend_events
+                    )
+                    self.publish_dividend_events(merged_dividend_events)
                     
                     # Delay between requests to avoid rate limiting
                     time.sleep(3)

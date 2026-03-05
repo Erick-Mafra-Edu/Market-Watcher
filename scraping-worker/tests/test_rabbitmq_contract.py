@@ -57,6 +57,43 @@ _FIXTURE_HTML = """
 </body></html>
 """
 
+_DIVIDENDS_FIXTURE_HTML = """
+<html><body>
+    <table>
+        <tr>
+            <td>Dividendo</td>
+            <td>0,85</td>
+            <td>15/03/2026</td>
+            <td>30/03/2026</td>
+        </tr>
+        <tr>
+            <td>JCP</td>
+            <td>0,42</td>
+            <td>2026-04-10</td>
+            <td>2026-04-25</td>
+        </tr>
+    </table>
+</body></html>
+"""
+
+_BRAPI_DIVIDENDS_FIXTURE = {
+    "results": [
+        {
+            "symbol": "PETR4",
+            "dividendsData": {
+                "cashDividends": [
+                    {
+                        "rate": 0.91,
+                        "exDate": "2026-05-10",
+                        "paymentDate": "2026-05-25",
+                        "label": "Dividendo"
+                    }
+                ]
+            }
+        }
+    ]
+}
+
 _REQUIRED_FIELDS = [
     "symbol",
     "dividend_yield",
@@ -218,6 +255,129 @@ class ScrapingWorkerContractTests(unittest.TestCase):
         self.assertEqual(parsed["symbol"], sample_payload["symbol"])
         for field in _REQUIRED_FIELDS:
             self.assertIn(field, parsed)
+
+    # -----------------------------------------------------------------------
+    # Dividend events payload and exchange contract
+    # -----------------------------------------------------------------------
+
+    def test_scrape_dividend_events_extracts_required_fields(self):
+        mock_response = MagicMock()
+        mock_response.content = _DIVIDENDS_FIXTURE_HTML.encode("utf-8")
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(self.scraper.session, "get", return_value=mock_response):
+            events = self.scraper.scrape_dividend_events("PETR4")
+
+        self.assertGreaterEqual(len(events), 1)
+        first = events[0]
+
+        for field in [
+            "symbol",
+            "dividend_amount",
+            "ex_date",
+            "payment_date",
+            "dividend_type",
+            "source",
+            "scraped_at",
+        ]:
+            self.assertIn(field, first)
+
+        self.assertEqual(first["symbol"], "PETR4")
+        self.assertIsInstance(first["dividend_amount"], float)
+
+    def test_publish_dividend_events_sends_to_dividend_events_exchange(self):
+        mock_channel = MagicMock()
+        self.scraper.channel = mock_channel
+
+        events = [
+            {
+                "symbol": "ITUB4",
+                "dividend_amount": 0.65,
+                "ex_date": "2026-03-20",
+                "payment_date": "2026-03-31",
+                "dividend_type": "DIVIDEND",
+                "source": "statusinvest",
+                "scraped_at": "2026-03-05T10:00:00",
+            }
+        ]
+
+        self.scraper.publish_dividend_events(events)
+
+        mock_channel.basic_publish.assert_called_once()
+        call_kwargs = mock_channel.basic_publish.call_args
+        exchange = call_kwargs.kwargs.get("exchange", call_kwargs.args[0] if call_kwargs.args else None)
+        self.assertEqual(exchange, "dividend_events")
+
+    def test_publish_dividend_events_sends_valid_json_body(self):
+        mock_channel = MagicMock()
+        self.scraper.channel = mock_channel
+
+        events = [
+            {
+                "symbol": "BBDC4",
+                "dividend_amount": 0.31,
+                "ex_date": "2026-04-10",
+                "payment_date": "2026-04-22",
+                "dividend_type": "JCP",
+                "source": "statusinvest",
+                "scraped_at": "2026-03-05T10:00:00",
+            }
+        ]
+
+        self.scraper.publish_dividend_events(events)
+
+        body = mock_channel.basic_publish.call_args.kwargs.get("body")
+        if body is None:
+            body = mock_channel.basic_publish.call_args.args[2]
+
+        parsed = json.loads(body)
+        self.assertEqual(parsed["symbol"], "BBDC4")
+        self.assertEqual(parsed["dividend_type"], "JCP")
+
+    def test_fetch_brapi_dividend_events_extracts_required_fields(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = _BRAPI_DIVIDENDS_FIXTURE
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(self.scraper.session, "get", return_value=mock_response):
+            events = self.scraper.fetch_brapi_dividend_events("PETR4")
+
+        self.assertEqual(len(events), 1)
+        first = events[0]
+        self.assertEqual(first["symbol"], "PETR4")
+        self.assertEqual(first["source"], "brapi")
+        self.assertEqual(first["ex_date"], "2026-05-10")
+        self.assertEqual(first["payment_date"], "2026-05-25")
+        self.assertAlmostEqual(first["dividend_amount"], 0.91)
+
+    def test_merge_dividend_events_prefers_brapi_on_duplicates(self):
+        statusinvest = [
+            {
+                "symbol": "PETR4",
+                "dividend_amount": 0.9,
+                "ex_date": "2026-05-10",
+                "payment_date": None,
+                "dividend_type": "DIVIDEND",
+                "source": "statusinvest",
+                "scraped_at": "2026-03-05T10:00:00",
+            }
+        ]
+        brapi = [
+            {
+                "symbol": "PETR4",
+                "dividend_amount": 0.91,
+                "ex_date": "2026-05-10",
+                "payment_date": "2026-05-25",
+                "dividend_type": "DIVIDEND",
+                "source": "brapi",
+                "scraped_at": "2026-03-05T10:00:00",
+            }
+        ]
+
+        merged = self.scraper.merge_dividend_events(statusinvest, brapi)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["source"], "brapi")
+        self.assertEqual(merged[0]["payment_date"], "2026-05-25")
 
 
 if __name__ == "__main__":

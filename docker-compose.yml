@@ -109,6 +109,7 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER:-admin}
       RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
       CHECK_INTERVAL: ${SCRAPER_CHECK_INTERVAL:-300}
+      BRAPI_TOKEN: ${BRAPI_TOKEN:-hDMfQ6HLaw4EFWCWCRccpX}
     depends_on:
       rabbitmq:
         condition: service_healthy

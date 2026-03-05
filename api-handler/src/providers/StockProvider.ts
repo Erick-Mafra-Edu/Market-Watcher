@@ -10,6 +10,7 @@ export interface StockQuote {
   volume: number;
   marketCap: number;
   name?: string;
+  currency?: string;
 }
 
 export interface HistoricalDataPoint {

@@ -48,6 +48,7 @@ describe('ApiHandler', () => {
       volume: 12345678,
       marketCap: 500000000000,
       name: 'PETRÓLEO BRASILEIRO S.A. - PETROBRAS',
+      currency: 'BRL',
     });
 
     const handler = new ApiHandler();
@@ -63,6 +64,7 @@ describe('ApiHandler', () => {
       volume: 12345678,
       marketCap: 500000000000,
       name: 'PETRÓLEO BRASILEIRO S.A. - PETROBRAS',
+      currency: 'BRL',
     });
     expect(mockBrapiInstance.fetchQuote).toHaveBeenCalledWith('PETR4');
     expect(mockYahooInstance.fetchQuote).not.toHaveBeenCalled();
@@ -77,6 +79,7 @@ describe('ApiHandler', () => {
       volume: 1000,
       marketCap: 123456789,
       name: 'Apple Inc.',
+      currency: 'USD',
     });
 
     const handler = new ApiHandler();
@@ -92,6 +95,7 @@ describe('ApiHandler', () => {
       volume: 1000,
       marketCap: 123456789,
       name: 'Apple Inc.',
+      currency: 'USD',
     });
     expect(mockBrapiInstance.fetchQuote).toHaveBeenCalledWith('AAPL');
     expect(mockYahooInstance.fetchQuote).toHaveBeenCalledWith('AAPL');

@@ -58,6 +58,7 @@ export class BrapiProvider implements StockProvider {
       volume: result.regularMarketVolume ?? 0,
       marketCap: result.marketCap ?? 0,
       name: result.longName || result.shortName,
+      currency: result.currency,
     };
   }
 

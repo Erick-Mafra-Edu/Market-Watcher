@@ -57,6 +57,16 @@ interface FundamentalData {
   scraped_at: string;
 }
 
+interface DividendEventData {
+  symbol: string;
+  dividend_amount: number;
+  ex_date: string;
+  payment_date?: string | null;
+  dividend_type?: string | null;
+  source?: string | null;
+  scraped_at?: string;
+}
+
 interface AlertUser {
   id: number;
   email: string;
@@ -226,6 +236,21 @@ export class NotifierService {
       }
     });
 
+    // Subscribe to dividend events updates
+    await this.channel.assertQueue('dividends_queue', { durable: true });
+    await this.channel.consume('dividends_queue', async (msg) => {
+      if (msg) {
+        try {
+          const dividendData: DividendEventData = JSON.parse(msg.content.toString());
+          await this.handleDividendUpdate(dividendData);
+          this.channel!.ack(msg);
+        } catch (error) {
+          console.error('Error processing dividend event:', error);
+          this.channel!.nack(msg, false, false);
+        }
+      }
+    });
+
     console.log('Queue consumers set up');
   }
 
@@ -233,6 +258,54 @@ export class NotifierService {
     if (!data.symbol || typeof data.symbol !== 'string') {
       throw new Error('Invalid fundamentals payload: symbol is required');
     }
+  }
+
+  private validateDividendPayload(data: DividendEventData): void {
+    if (!data.symbol || typeof data.symbol !== 'string') {
+      throw new Error('Invalid dividend payload: symbol is required');
+    }
+
+    const dividendAmount = Number(data.dividend_amount);
+    if (!Number.isFinite(dividendAmount) || dividendAmount <= 0) {
+      throw new Error('Invalid dividend payload: dividend_amount must be a positive number');
+    }
+
+    if (!data.ex_date || typeof data.ex_date !== 'string') {
+      throw new Error('Invalid dividend payload: ex_date is required');
+    }
+  }
+
+  private normalizeDate(value: unknown): string | null {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+
+    const raw = value.trim();
+    const parsedIso = new Date(raw);
+    if (!Number.isNaN(parsedIso.getTime())) {
+      return parsedIso.toISOString().slice(0, 10);
+    }
+
+    const brazilianDateMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!brazilianDateMatch) {
+      return null;
+    }
+
+    const [, day, month, year] = brazilianDateMatch;
+    return `${year}-${month}-${day}`;
+  }
+
+  private normalizeTimestamp(value: unknown): string | null {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+
+    const parsed = new Date(value.trim());
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return parsed.toISOString();
   }
 
   private normalizeNumeric(value: unknown): number | null {
@@ -355,6 +428,42 @@ export class NotifierService {
     );
 
     await this.checkAlertConditions();
+  }
+
+  async handleDividendUpdate(dividendData: DividendEventData): Promise<void> {
+    this.validateDividendPayload(dividendData);
+
+    const normalizedSymbol = dividendData.symbol.toUpperCase();
+    const exDate = this.normalizeDate(dividendData.ex_date);
+    const paymentDate = this.normalizeDate(dividendData.payment_date ?? null);
+    const scrapedAt = this.normalizeTimestamp(dividendData.scraped_at ?? null);
+
+    if (!exDate) {
+      throw new Error('Invalid dividend payload: ex_date format is invalid');
+    }
+
+    const stockId = await this.getOrCreateStockId(normalizedSymbol);
+    await pool.query(
+      `INSERT INTO dividend_history (stock_id, dividend_amount, ex_date, payment_date, dividend_type, source, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamp, CURRENT_TIMESTAMP))
+       ON CONFLICT (stock_id, ex_date) DO UPDATE
+       SET dividend_amount = EXCLUDED.dividend_amount,
+           payment_date = COALESCE(EXCLUDED.payment_date, dividend_history.payment_date),
+           dividend_type = COALESCE(EXCLUDED.dividend_type, dividend_history.dividend_type),
+           source = COALESCE(EXCLUDED.source, dividend_history.source),
+           updated_at = CURRENT_TIMESTAMP`,
+      [
+        stockId,
+        Number(dividendData.dividend_amount),
+        exDate,
+        paymentDate,
+        dividendData.dividend_type || null,
+        dividendData.source || 'statusinvest',
+        scrapedAt,
+      ]
+    );
+
+    console.log(`Processed dividend event: ${normalizedSymbol} @ ${exDate}`);
   }
 
   async handleNews(newsData: NewsData): Promise<void> {

@@ -146,6 +146,52 @@ describe('NotifierService — communication contract tests', () => {
     });
   });
 
+  describe('dividend_events payload contract', () => {
+    it('accepts a valid dividend event payload', async () => {
+      const valid = {
+        symbol: 'PETR4',
+        dividend_amount: 0.85,
+        ex_date: '2026-03-15',
+        payment_date: '2026-03-30',
+        dividend_type: 'DIVIDEND',
+        source: 'statusinvest',
+        scraped_at: new Date().toISOString(),
+      };
+      await expect(service.handleDividendUpdate(valid as any)).resolves.not.toThrow();
+    });
+
+    it('rejects dividend event missing symbol', async () => {
+      const invalid = {
+        dividend_amount: 0.85,
+        ex_date: '2026-03-15',
+      } as any;
+      await expect(service.handleDividendUpdate(invalid)).rejects.toThrow(
+        'Invalid dividend payload: symbol is required',
+      );
+    });
+
+    it('rejects dividend event with invalid amount', async () => {
+      const invalid = {
+        symbol: 'PETR4',
+        dividend_amount: -1,
+        ex_date: '2026-03-15',
+      } as any;
+      await expect(service.handleDividendUpdate(invalid)).rejects.toThrow(
+        'Invalid dividend payload: dividend_amount must be a positive number',
+      );
+    });
+
+    it('rejects dividend event missing ex_date', async () => {
+      const invalid = {
+        symbol: 'PETR4',
+        dividend_amount: 0.85,
+      } as any;
+      await expect(service.handleDividendUpdate(invalid)).rejects.toThrow(
+        'Invalid dividend payload: ex_date is required',
+      );
+    });
+  });
+
   describe('market_news payload contract', () => {
     it('accepts a valid market_news payload', async () => {
       const valid = {
@@ -427,6 +473,64 @@ describe('NotifierService — communication contract tests', () => {
 
       expect(channel.ack).not.toHaveBeenCalled();
       expect(channel.nack).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // Ack / nack: dividends_queue
+  // =========================================================================
+
+  describe('dividends_queue — ack/nack behaviour', () => {
+    let channel: ReturnType<typeof makeMockChannel>;
+    let dividendsCallback: (msg: any) => Promise<void>;
+
+    beforeEach(async () => {
+      channel = makeMockChannel();
+      (service as any).channel = channel;
+      await service.setupQueues();
+      // dividends_queue is registered in the fourth channel.consume call
+      dividendsCallback = channel.consume.mock.calls[3][1];
+    });
+
+    it('acks when a valid payload is processed successfully', async () => {
+      jest.spyOn(service, 'handleDividendUpdate').mockResolvedValue(undefined as any);
+      const msg = makeMsg({
+        symbol: 'VALE3',
+        dividend_amount: 1.25,
+        ex_date: '2026-03-10',
+        payment_date: '2026-03-25',
+        dividend_type: 'DIVIDEND',
+        source: 'statusinvest',
+      });
+
+      await dividendsCallback(msg);
+
+      expect(channel.ack).toHaveBeenCalledTimes(1);
+      expect(channel.ack).toHaveBeenCalledWith(msg);
+      expect(channel.nack).not.toHaveBeenCalled();
+    });
+
+    it('nacks (no requeue) when payload is missing symbol', async () => {
+      const msg = makeMsg({
+        dividend_amount: 1.25,
+        ex_date: '2026-03-10',
+      });
+
+      await dividendsCallback(msg);
+
+      expect(channel.nack).toHaveBeenCalledTimes(1);
+      expect(channel.nack).toHaveBeenCalledWith(msg, false, false);
+      expect(channel.ack).not.toHaveBeenCalled();
+    });
+
+    it('nacks (no requeue) on malformed JSON', async () => {
+      const msg = makeMalformedMsg();
+
+      await dividendsCallback(msg);
+
+      expect(channel.nack).toHaveBeenCalledTimes(1);
+      expect(channel.nack).toHaveBeenCalledWith(msg, false, false);
+      expect(channel.ack).not.toHaveBeenCalled();
     });
   });
 });
