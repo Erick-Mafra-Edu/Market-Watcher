@@ -6,6 +6,7 @@ import os
 import time
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Dict, Optional
 import requests
@@ -36,14 +37,23 @@ class StatusInvestScraper:
     
     BASE_URL = 'https://statusinvest.com.br/acoes'
     
-    def __init__(self):
+    INDICATOR_ALIASES = {
+        'dividend-yield': ['dividend yield', 'dy', 'dividend-yield'],
+        'p-vp': ['p/vp', 'p vp', 'p-vp', 'pvp'],
+        'p-l': ['p/l', 'p l', 'p-l', 'pl'],
+        'roe': ['roe', 'return on equity'],
+        'liquidity': ['liquidez media diaria', 'liquidez media', 'liquidity'],
+    }
+
+    def __init__(self, connect_rabbitmq: bool = True):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         self.connection = None
         self.channel = None
-        self.connect_rabbitmq()
+        if connect_rabbitmq:
+            self.connect_rabbitmq()
     
     def connect_rabbitmq(self):
         """Establish connection to RabbitMQ"""
@@ -119,37 +129,92 @@ class StatusInvestScraper:
             logger.error(f"Unexpected error scraping {symbol}: {e}")
             return None
     
-    def _extract_indicator(self, soup: BeautifulSoup, indicator_name: str) -> Optional[float]:
-        """Extract a specific indicator from the page
-        
-        NOTE: This is currently a MOCK implementation for demonstration purposes.
-        In production, this should parse actual HTML elements from StatusInvest.
-        
-        To implement properly:
-        1. Inspect StatusInvest page HTML structure
-        2. Find the correct CSS selectors or element IDs
-        3. Parse and convert values to float
-        4. Handle missing or invalid data gracefully
-        
-        Example real implementation:
-            element = soup.find('div', {'title': indicator_name})
-            if element:
-                value_text = element.find('strong').text.strip()
-                return float(value_text.replace(',', '.').replace('%', ''))
-        """
+    def _normalize_numeric(self, raw_value: str) -> Optional[float]:
+        """Normalize numeric strings from Brazilian/US formats into float."""
+        if raw_value is None:
+            return None
+
+        text = str(raw_value).strip().replace('\xa0', ' ')
+        if text in ['', '-', '--', 'N/A', 'n/a']:
+            return None
+
+        multiplier = 1.0
+        lowered = text.lower()
+        if lowered.endswith('k'):
+            multiplier = 1_000.0
+            text = text[:-1]
+        elif lowered.endswith('m'):
+            multiplier = 1_000_000.0
+            text = text[:-1]
+        elif lowered.endswith('b'):
+            multiplier = 1_000_000_000.0
+            text = text[:-1]
+
+        cleaned = re.sub(r'[^0-9,.-]', '', text)
+        if not cleaned or cleaned in ['-', '.', ',']:
+            return None
+
+        if ',' in cleaned and '.' in cleaned:
+            if cleaned.rfind(',') > cleaned.rfind('.'):
+                cleaned = cleaned.replace('.', '').replace(',', '.')
+            else:
+                cleaned = cleaned.replace(',', '')
+        elif ',' in cleaned:
+            parts = cleaned.split(',')
+            if len(parts) == 2 and len(parts[1]) <= 2:
+                cleaned = cleaned.replace(',', '.')
+            else:
+                cleaned = cleaned.replace(',', '')
+
         try:
-            # MOCK DATA - Replace with actual HTML parsing
-            # TODO: Implement real StatusInvest HTML parsing
-            logger.warning(f'Using mock data for {indicator_name} - implement actual HTML parsing for production')
-            
-            mock_data = {
-                'dividend-yield': 5.5,
-                'p-vp': 2.3,
-                'p-l': 15.2,
-                'roe': 18.5,
-                'liquidity': 1000000
-            }
-            return mock_data.get(indicator_name, 0.0)
+            return float(cleaned) * multiplier
+        except ValueError:
+            return None
+
+    def _extract_indicator(self, soup: BeautifulSoup, indicator_name: str) -> Optional[float]:
+        """Extract a specific indicator from page text and nearby DOM labels."""
+        try:
+            aliases = self.INDICATOR_ALIASES.get(indicator_name, [indicator_name])
+            page_text = soup.get_text(' ', strip=True)
+
+            for alias in aliases:
+                pattern = re.compile(
+                    rf'{re.escape(alias)}\s*[:\-]?\s*([-+]?[0-9][0-9\.,]*(?:\s*[kKmMbB]|%)?)',
+                    re.IGNORECASE
+                )
+                match = pattern.search(page_text)
+                if match:
+                    parsed = self._normalize_numeric(match.group(1).strip())
+                    if parsed is not None:
+                        return parsed
+
+            numeric_token = re.compile(r'[-+]?[0-9][0-9\.,]*(?:\s*[kKmMbB]|%)?')
+            for label_node in soup.find_all(string=True):
+                label_text = label_node.strip().lower()
+                if not label_text:
+                    continue
+
+                if not any(alias in label_text for alias in aliases):
+                    continue
+
+                parent = label_node.parent
+                candidate_blocks = []
+
+                if parent:
+                    candidate_blocks.append(parent.get_text(' ', strip=True))
+                    sibling = parent.find_next_sibling()
+                    if sibling:
+                        candidate_blocks.append(sibling.get_text(' ', strip=True))
+
+                for block in candidate_blocks:
+                    tokens = numeric_token.findall(block)
+                    for token in reversed(tokens):
+                        parsed = self._normalize_numeric(token.strip())
+                        if parsed is not None:
+                            return parsed
+
+            logger.warning(f'Indicator not found for {indicator_name}')
+            return None
         except Exception as e:
             logger.error(f"Error extracting {indicator_name}: {e}")
             return None

@@ -61,9 +61,11 @@ interface AlertUser {
   id: number;
   email: string;
   name?: string;
+  phone?: string;
+  whatsapp?: string;
 }
 
-class NotifierService {
+export class NotifierService {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private messagingManager: MessagingManager;
@@ -409,7 +411,7 @@ class NotifierService {
   async checkAlertConditions(): Promise<void> {
     // Get users with watchlist
     const result = await pool.query(`
-      SELECT DISTINCT u.id, u.email, u.name, s.symbol, uw.min_price_change,
+      SELECT DISTINCT u.id, u.email, u.name, u.phone, u.whatsapp, s.symbol, uw.min_price_change,
              sid.dividend_yield, sid.p_vp, sid.p_l, sid.roe, sid.liquidity
       FROM users u
       INNER JOIN user_watchlist uw ON u.id = uw.user_id
@@ -495,6 +497,8 @@ class NotifierService {
       id: user.id.toString(),
       name: user.name,
       email: user.email,
+      phone: user.phone,
+      whatsapp: user.whatsapp,
     };
 
     // Create HTML content
@@ -651,13 +655,14 @@ Market Watcher - Automated Alert
   }
 }
 
-// Start the service
-const service = new NotifierService();
+if (process.env.NODE_ENV !== 'test') {
+  const service = new NotifierService();
 
-process.on('SIGINT', async () => {
-  console.log('Shutting down Notifier Service...');
-  await service.close();
-  process.exit(0);
-});
+  process.on('SIGINT', async () => {
+    console.log('Shutting down Notifier Service...');
+    await service.close();
+    process.exit(0);
+  });
 
-service.start();
+  service.start();
+}
