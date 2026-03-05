@@ -1,11 +1,14 @@
 /**
- * API Handler - Yahoo Finance integration service
- * Monitors stock prices and publishes data to RabbitMQ
+ * API Handler - Stock market data service
+ * Fetches stock data via BRAPI (primary) with Yahoo Finance as fallback,
+ * monitors prices and publishes data to RabbitMQ.
  */
 import express from 'express';
-import yahooFinance from 'yahoo-finance2';
 import amqp, { Channel, ChannelModel } from 'amqplib';
 import { Pool } from 'pg';
+import { StockProvider } from './providers/StockProvider';
+import { BrapiProvider } from './providers/BrapiProvider';
+import { YahooFinanceProvider } from './providers/YahooFinanceProvider';
 
 // Configuration
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
@@ -13,6 +16,7 @@ const RABBITMQ_USER = process.env.RABBITMQ_USER || 'admin';
 const RABBITMQ_PASS = process.env.RABBITMQ_PASS || 'admin';
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '300') * 1000;
 const API_REQUEST_DELAY = parseInt(process.env.API_REQUEST_DELAY || '1000');
+const BRAPI_TOKEN = process.env.BRAPI_TOKEN;
 const PORT = 3001;
 
 // Database connection
@@ -37,10 +41,14 @@ export class ApiHandler {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private app: express.Application;
+  private primaryProvider: StockProvider;
+  private fallbackProvider: StockProvider;
 
   constructor() {
     this.app = express();
     this.app.use(express.json());
+    this.primaryProvider = new BrapiProvider(BRAPI_TOKEN);
+    this.fallbackProvider = new YahooFinanceProvider();
     this.setupRoutes();
   }
 
@@ -65,14 +73,17 @@ export class ApiHandler {
     this.app.get('/api/stock/:symbol/history', async (req, res) => {
       try {
         const { symbol } = req.params;
-        const period1 = req.query.period1 as string;
-        const period2 = req.query.period2 as string;
-        
-        const history = await yahooFinance.historical(symbol, {
-          period1: period1 || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          period2: period2 || new Date().toISOString().split('T')[0],
-        });
-        
+        const period1 = (req.query.period1 as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const period2 = (req.query.period2 as string) || new Date().toISOString().split('T')[0];
+
+        let history;
+        try {
+          history = await this.primaryProvider.fetchHistory(symbol, period1, period2);
+        } catch (primaryError) {
+          console.warn(`BRAPI historical failed for ${symbol}, falling back to Yahoo Finance:`, primaryError);
+          history = await this.fallbackProvider.fetchHistory(symbol, period1, period2);
+        }
+
         res.json(history);
       } catch (error: any) {
         console.error('Error fetching history:', error);
@@ -115,18 +126,10 @@ export class ApiHandler {
 
   async fetchStockQuote(symbol: string): Promise<any> {
     try {
-      const quote = await yahooFinance.quote(symbol);
-      return {
-        symbol: quote.symbol,
-        price: quote.regularMarketPrice,
-        changePercent: quote.regularMarketChangePercent,
-        volume: quote.regularMarketVolume,
-        marketCap: quote.marketCap,
-        name: quote.longName || quote.shortName,
-      };
-    } catch (error) {
-      console.error(`Error fetching quote for ${symbol}:`, error);
-      throw error;
+      return await this.primaryProvider.fetchQuote(symbol);
+    } catch (primaryError) {
+      console.warn(`BRAPI failed for ${symbol}, falling back to Yahoo Finance:`, primaryError);
+      return await this.fallbackProvider.fetchQuote(symbol);
     }
   }
 
