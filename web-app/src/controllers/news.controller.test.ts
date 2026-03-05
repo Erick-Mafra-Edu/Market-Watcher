@@ -54,7 +54,43 @@ describe('NewsController', () => {
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
         count: 1,
-        news: mockNews,
+        news: [
+          {
+            ...mockNews[0],
+            related_stocks: ['AAPL', 'GOOGL'],
+          },
+        ],
+      });
+    });
+
+    it('should enrich related stocks from news text on backend', async () => {
+      const mockNews = [
+        {
+          id: 2,
+          title: 'Dow plunges while oil spikes',
+          description: 'Market moves after geopolitical tension.',
+          url: 'https://example.com/dow-oil',
+          source: 'WSJ',
+          published_at: new Date(),
+          sentiment_score: -0.1,
+          sentiment: 'neutral',
+          related_stocks: null,
+        },
+      ];
+
+      (mockPool.query as jest.Mock).mockResolvedValue({ rows: mockNews });
+
+      await newsController.getNews(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        success: true,
+        count: 1,
+        news: [
+          expect.objectContaining({
+            id: 2,
+            related_stocks: expect.arrayContaining(['DOWJONES', 'PETROLEO']),
+          }),
+        ],
       });
     });
 
@@ -101,7 +137,12 @@ describe('NewsController', () => {
         success: true,
         symbol: 'AAPL',
         count: 1,
-        news: mockNews,
+        news: [
+          expect.objectContaining({
+            id: 1,
+            related_stocks: expect.arrayContaining(['AAPL']),
+          }),
+        ],
       });
     });
   });

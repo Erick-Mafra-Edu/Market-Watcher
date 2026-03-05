@@ -8,8 +8,57 @@ import { Pool } from 'pg';
 export class NewsController {
   private pool: Pool;
 
+  private readonly macroMappings: Array<{ keyword: string; asset: string }> = [
+    { keyword: 'DOW', asset: 'DOWJONES' },
+    { keyword: 'DJIA', asset: 'DOWJONES' },
+    { keyword: 'NASDAQ', asset: 'NASDAQ' },
+    { keyword: 'S&P 500', asset: 'SP500' },
+    { keyword: 'SP500', asset: 'SP500' },
+    { keyword: 'OIL', asset: 'PETROLEO' },
+    { keyword: 'CRUDE', asset: 'PETROLEO' },
+    { keyword: 'BITCOIN', asset: 'BITCOIN' },
+    { keyword: 'GOLD', asset: 'OURO' },
+  ];
+
   constructor(pool: Pool) {
     this.pool = pool;
+  }
+
+  private inferAssetsFromText(text: string): string[] {
+    const assets = new Set<string>();
+    const upper = (text || '').toUpperCase();
+
+    const brMatches = upper.match(/\b[A-Z]{4}\d{1,2}(?:\.SA)?\b/g) || [];
+    brMatches.forEach((symbol) => assets.add(symbol));
+
+    const usMatches = upper.match(/\$[A-Z]{1,5}\b/g) || [];
+    usMatches.forEach((symbol) => assets.add(symbol.replace('$', '')));
+
+    this.macroMappings.forEach(({ keyword, asset }) => {
+      if (upper.includes(keyword)) {
+        assets.add(asset);
+      }
+    });
+
+    return Array.from(assets);
+  }
+
+  private enrichRelatedStocks(row: any, fallbackSymbol?: string): any {
+    const fromApi = Array.isArray(row.related_stocks)
+      ? row.related_stocks.filter(Boolean).map((symbol: string) => String(symbol).toUpperCase())
+      : [];
+
+    const inferred = this.inferAssetsFromText(`${row.title || ''} ${row.description || ''}`);
+    const merged = new Set<string>([...fromApi, ...inferred]);
+
+    if (fallbackSymbol) {
+      merged.add(String(fallbackSymbol).toUpperCase());
+    }
+
+    return {
+      ...row,
+      related_stocks: Array.from(merged),
+    };
   }
 
   /**
@@ -67,11 +116,12 @@ export class NewsController {
       params.push(limit);
 
       const result = await this.pool.query(query, params);
+      const enrichedNews = result.rows.map((row) => this.enrichRelatedStocks(row));
 
       res.json({
         success: true,
-        count: result.rows.length,
-        news: result.rows,
+        count: enrichedNews.length,
+        news: enrichedNews,
       });
     } catch (error: any) {
       console.error('Error fetching news:', error);
@@ -149,12 +199,13 @@ export class NewsController {
 
       params.push(limit, offset);
       const result = await this.pool.query(query, params);
+      const enrichedNews = result.rows.map((row) => this.enrichRelatedStocks(row, symbol));
 
       res.json({
         success: true,
         symbol,
-        count: result.rows.length,
-        news: result.rows,
+        count: enrichedNews.length,
+        news: enrichedNews,
       });
     } catch (error: any) {
       console.error('Error fetching stock news:', error);

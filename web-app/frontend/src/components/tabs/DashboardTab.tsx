@@ -4,6 +4,7 @@ import {
   getNews,
   getPortfolio,
   getPortfolioPerformance,
+  getStockNews,
   getPortfolioTransactions,
   getStockQuote,
   getStockHistory,
@@ -108,6 +109,10 @@ function buildHistoryCandidates(symbol: string) {
   return candidates;
 }
 
+function normalizeRelatedStocks(item: NewsItem): string[] {
+  return (item.related_stocks || []).map((symbol) => symbol.toUpperCase());
+}
+
 export function DashboardTab({ token, onError }: DashboardTabProps) {
   const [loading, setLoading] = useState(true);
   const [walletCurrency, setWalletCurrency] = useState<CurrencyCode>('BRL');
@@ -118,6 +123,7 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
   const [detailLabels, setDetailLabels] = useState<string[]>([]);
   const [detailSeries, setDetailSeries] = useState<number[]>([]);
   const [detailTransactions, setDetailTransactions] = useState<PortfolioTransaction[]>([]);
+  const [detailNews, setDetailNews] = useState<NewsItem[]>([]);
   const [symbolCurrencyMap, setSymbolCurrencyMap] = useState<Record<string, CurrencyCode>>({});
   const [newsQuoteBySymbol, setNewsQuoteBySymbol] = useState<Record<string, {
     price: number;
@@ -168,10 +174,11 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
         const relatedSymbols = Array.from(
           new Set(
             news
-              .flatMap((item) => item.related_stocks || [])
-              .map((symbol) => symbol.toUpperCase())
+              .flatMap((item) => normalizeRelatedStocks(item))
           )
-        ).slice(0, 10);
+        )
+          .filter((symbol) => /^(?:[A-Z]{1,5}|[A-Z]{1,5}\.SA|[A-Z]{4}\d{1,2}(?:\.SA)?)$/.test(symbol))
+          .slice(0, 10);
 
         if (relatedSymbols.length === 0) {
           setNewsQuoteBySymbol({});
@@ -300,6 +307,7 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
     setDetailLoading(true);
     setDetailLabels([]);
     setDetailSeries([]);
+    setDetailNews([]);
 
     try {
       try {
@@ -341,6 +349,13 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
       }
 
       setDetailTransactions(txs);
+
+      try {
+        const stockNews = await getStockNews(token, symbol, 5);
+        setDetailNews(stockNews || []);
+      } catch {
+        setDetailNews([]);
+      }
     } catch (error: any) {
       onError(error.message || 'Falha ao carregar detalhes do ativo.');
     } finally {
@@ -354,6 +369,7 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
     setDetailLabels([]);
     setDetailSeries([]);
     setDetailTransactions([]);
+    setDetailNews([]);
   }
 
   if (loading) {
@@ -454,30 +470,39 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
           <p className="muted tiny">Ultimas publicacoes relevantes para o seu monitoramento.</p>
           {state.news.length === 0 && <p className="muted">Sem noticias recentes.</p>}
           {state.news.map((item) => (
-            <article key={item.id} className="list-row">
-              <div className="stack-xs">
-                <strong>{item.title}</strong>
-                <div className="badges-row">
-                  <span className={`badge ${getSentimentClass(item.sentiment)}`}>
-                    {getSentimentLabel(item.sentiment)}
-                  </span>
-                  {item.related_stocks && item.related_stocks.length > 0 && (
-                    <span className="badge">Ativo: {item.related_stocks.slice(0, 2).join(', ')}</span>
+            (() => {
+              const relatedAssets = normalizeRelatedStocks(item);
+              const primaryAsset = relatedAssets[0];
+
+              return (
+                <article key={item.id} className="list-row">
+                  <div className="stack-xs">
+                    <strong>{item.title}</strong>
+                    <div className="badges-row">
+                      <span className={`badge ${getSentimentClass(item.sentiment)}`}>
+                        {getSentimentLabel(item.sentiment)}
+                      </span>
+                      {relatedAssets.length > 0 ? relatedAssets.map((symbol) => (
+                        <span key={`${item.id}-${symbol}`} className="badge">Ativo: {symbol}</span>
+                      )) : (
+                        <span className="badge">Ativo: nao identificado</span>
+                      )}
+                      {primaryAsset && newsQuoteBySymbol[primaryAsset] && (
+                        <span className={`badge ${newsQuoteBySymbol[primaryAsset].changePercent >= 0 ? 'trend-positive' : 'trend-negative'}`}>
+                          {primaryAsset} {newsQuoteBySymbol[primaryAsset].changePercent >= 0 ? 'valorizando' : 'caindo'} ({newsQuoteBySymbol[primaryAsset].changePercent >= 0 ? '+' : ''}{newsQuoteBySymbol[primaryAsset].changePercent.toFixed(2)}%) · {formatQuotePrice(newsQuoteBySymbol[primaryAsset].price, newsQuoteBySymbol[primaryAsset].currency)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="muted tiny">{new Date(item.published_at).toLocaleString()}</p>
+                  </div>
+                  {item.url && (
+                    <a href={item.url} target="_blank" rel="noreferrer">
+                      Abrir
+                    </a>
                   )}
-                  {item.related_stocks?.[0] && newsQuoteBySymbol[item.related_stocks[0].toUpperCase()] && (
-                    <span className={`badge ${newsQuoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? 'trend-positive' : 'trend-negative'}`}>
-                      {item.related_stocks[0].toUpperCase()} {newsQuoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? 'valorizando' : 'caindo'} ({newsQuoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? '+' : ''}{newsQuoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent.toFixed(2)}%) · {formatQuotePrice(newsQuoteBySymbol[item.related_stocks[0].toUpperCase()].price, newsQuoteBySymbol[item.related_stocks[0].toUpperCase()].currency)}
-                    </span>
-                  )}
-                </div>
-                <p className="muted tiny">{new Date(item.published_at).toLocaleString()}</p>
-              </div>
-              {item.url && (
-                <a href={item.url} target="_blank" rel="noreferrer">
-                  Abrir
-                </a>
-              )}
-            </article>
+                </article>
+              );
+            })()
           ))}
         </article>
 
@@ -552,6 +577,28 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
                     </strong>
                     <p className="muted tiny">Data: {new Date(tx.transaction_date).toLocaleDateString()}</p>
                   </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="stack">
+              <h3>Noticias recentes de {detailSymbol}</h3>
+              {detailNews.length === 0 && <p className="muted">Sem noticias recentes para este ativo.</p>}
+              {detailNews.map((news) => (
+                <article key={news.id} className="list-row">
+                  <div className="stack-xs">
+                    <strong>{news.title}</strong>
+                    <div className="badges-row">
+                      <span className={`badge ${getSentimentClass(news.sentiment)}`}>{getSentimentLabel(news.sentiment)}</span>
+                      {(news.related_stocks || []).slice(0, 3).map((related) => (
+                        <span key={`${news.id}-${related}`} className="badge">Ativo: {related.toUpperCase()}</span>
+                      ))}
+                    </div>
+                    <p className="muted tiny">{new Date(news.published_at).toLocaleString()}</p>
+                  </div>
+                  {news.url && (
+                    <a href={news.url} target="_blank" rel="noreferrer">Abrir</a>
+                  )}
                 </article>
               ))}
             </div>

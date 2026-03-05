@@ -9,11 +9,18 @@ interface NewsTabProps {
 
 export function NewsTab({ token, onError }: NewsTabProps) {
   const [items, setItems] = useState<NewsItem[]>([]);
+  const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all');
+  const [assetFilter, setAssetFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [quoteBySymbol, setQuoteBySymbol] = useState<Record<string, {
     price: number;
     changePercent: number;
     currency?: string;
   }>>({});
+
+  function normalizeRelatedStocks(item: NewsItem): string[] {
+    return (item.related_stocks || []).map((symbol) => symbol.toUpperCase());
+  }
 
   function getSentimentLabel(sentiment?: NewsItem['sentiment']) {
     if (sentiment === 'positive') return 'Positiva';
@@ -46,10 +53,11 @@ export function NewsTab({ token, onError }: NewsTabProps) {
         const relatedSymbols = Array.from(
           new Set(
             news
-              .flatMap((item) => item.related_stocks || [])
-              .map((symbol) => symbol.toUpperCase())
+              .flatMap((item) => normalizeRelatedStocks(item))
           )
-        ).slice(0, 20);
+        )
+          .filter((symbol) => /^(?:[A-Z]{1,5}|[A-Z]{1,5}\.SA|[A-Z]{4}\d{1,2}(?:\.SA)?)$/.test(symbol))
+          .slice(0, 20);
 
         if (relatedSymbols.length === 0) {
           setQuoteBySymbol({});
@@ -83,12 +91,66 @@ export function NewsTab({ token, onError }: NewsTabProps) {
     load();
   }, [token, onError]);
 
+  const assetOptions = Array.from(
+    new Set(items.flatMap((item) => normalizeRelatedStocks(item)))
+  ).sort();
+
+  const filteredItems = items.filter((item) => {
+    const matchesSentiment = sentimentFilter === 'all' || (item.sentiment || 'neutral') === sentimentFilter;
+    const relatedSymbols = normalizeRelatedStocks(item);
+    const matchesAsset = assetFilter === 'all' || relatedSymbols.includes(assetFilter);
+    const searchable = `${item.title} ${item.description || ''} ${item.source || ''}`.toLowerCase();
+    const matchesSearch = !searchTerm.trim() || searchable.includes(searchTerm.trim().toLowerCase());
+
+    return matchesSentiment && matchesAsset && matchesSearch;
+  });
+
   return (
     <section className="card stack">
       <h3>Noticias de Mercado</h3>
       <p className="muted tiny">Acompanhe o fluxo de noticias e abra a fonte original quando necessario.</p>
+      <div className="form-grid-4">
+        <label className="field stack-xs">
+          <span className="tiny muted">Sentimento</span>
+          <select
+            value={sentimentFilter}
+            onChange={(event) => setSentimentFilter(event.target.value as 'all' | 'positive' | 'neutral' | 'negative')}
+          >
+            <option value="all">Todos</option>
+            <option value="positive">Positivas</option>
+            <option value="neutral">Neutras</option>
+            <option value="negative">Negativas</option>
+          </select>
+        </label>
+
+        <label className="field stack-xs">
+          <span className="tiny muted">Ativo relacionado</span>
+          <select value={assetFilter} onChange={(event) => setAssetFilter(event.target.value)}>
+            <option value="all">Todos os ativos</option>
+            {assetOptions.map((symbol) => (
+              <option key={symbol} value={symbol}>{symbol}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field stack-xs">
+          <span className="tiny muted">Buscar</span>
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Titulo, descricao ou fonte"
+          />
+        </label>
+      </div>
+
       {items.length === 0 && <p className="muted">Nenhuma noticia encontrada.</p>}
-      {items.map((item) => (
+      {items.length > 0 && filteredItems.length === 0 && (
+        <p className="muted">Nenhuma noticia encontrada com os filtros atuais.</p>
+      )}
+      {filteredItems.map((item) => {
+        const relatedAssets = normalizeRelatedStocks(item);
+        const primaryAsset = relatedAssets[0];
+        return (
         <article key={item.id} className="list-row">
           <div className="stack-xs">
             <strong>{item.title}</strong>
@@ -97,16 +159,16 @@ export function NewsTab({ token, onError }: NewsTabProps) {
               <span className={`badge ${getSentimentClass(item.sentiment)}`}>
                 Sentimento: {getSentimentLabel(item.sentiment)}
               </span>
-              {item.related_stocks && item.related_stocks.length > 0 && (
-                <span className="badge">
-                  Ativo: {item.related_stocks.slice(0, 2).join(', ')}
-                </span>
+              {relatedAssets.length > 0 ? relatedAssets.map((symbol) => (
+                <span key={`${item.id}-${symbol}`} className="badge">Ativo: {symbol}</span>
+              )) : (
+                <span className="badge">Ativo: nao identificado</span>
               )}
-              {item.related_stocks?.[0] && quoteBySymbol[item.related_stocks[0].toUpperCase()] && (
+              {primaryAsset && quoteBySymbol[primaryAsset] && (
                 <span
-                  className={`badge ${quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? 'trend-positive' : 'trend-negative'}`}
+                  className={`badge ${quoteBySymbol[primaryAsset].changePercent >= 0 ? 'trend-positive' : 'trend-negative'}`}
                 >
-                  {item.related_stocks[0].toUpperCase()} {quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? 'valorizando' : 'caindo'} ({quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent >= 0 ? '+' : ''}{quoteBySymbol[item.related_stocks[0].toUpperCase()].changePercent.toFixed(2)}%) · {formatPrice(quoteBySymbol[item.related_stocks[0].toUpperCase()].price, quoteBySymbol[item.related_stocks[0].toUpperCase()].currency)}
+                  {primaryAsset} {quoteBySymbol[primaryAsset].changePercent >= 0 ? 'valorizando' : 'caindo'} ({quoteBySymbol[primaryAsset].changePercent >= 0 ? '+' : ''}{quoteBySymbol[primaryAsset].changePercent.toFixed(2)}%) · {formatPrice(quoteBySymbol[primaryAsset].price, quoteBySymbol[primaryAsset].currency)}
                 </span>
               )}
             </div>
@@ -118,7 +180,8 @@ export function NewsTab({ token, onError }: NewsTabProps) {
             </a>
           )}
         </article>
-      ))}
+      );
+      })}
     </section>
   );
 }
