@@ -3,14 +3,22 @@
  *
  * Validates that publishStockData emits a payload conforming to the
  * stock_prices contract:  symbol, price, changePercent, volume, marketCap, timestamp
+ *
+ * Also covers the retry/reconnect behaviour of connectRabbitMQ():
+ * - retries up to 5 times before throwing
+ * - succeeds on a later attempt after initial failures
  */
 
 // yahoo-finance2 is ESM-only; keep the existing virtual mock
 jest.mock('yahoo-finance2', () => ({ quote: jest.fn(), historical: jest.fn() }), { virtual: true });
 jest.mock('./providers/BrapiProvider');
 jest.mock('./providers/YahooFinanceProvider');
+jest.mock('amqplib');
 
+import amqp from 'amqplib';
 import { ApiHandler } from './index';
+
+const mockedAmqp = amqp as jest.Mocked<typeof amqp>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -166,5 +174,87 @@ describe('ApiHandler — stock_prices producer contract', () => {
       const published = JSON.parse((buffer as Buffer).toString());
       expect(published.changePercent).toBe(-3.7);
     });
+  });
+});
+
+// =============================================================================
+// connectRabbitMQ — retry / reconnect behaviour
+// =============================================================================
+
+describe('ApiHandler — connectRabbitMQ retry behaviour', () => {
+  let handler: ApiHandler;
+  let timeoutSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Make retry delays instant so tests complete without waiting 5 s each
+    timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((fn: any) => {
+      fn();
+      return 0 as any;
+    });
+    handler = new ApiHandler();
+  });
+
+  afterEach(() => {
+    timeoutSpy.mockRestore();
+  });
+
+  it('throws after exhausting all 5 retry attempts', async () => {
+    const connectError = new Error('broker unavailable');
+    (mockedAmqp.connect as jest.Mock).mockRejectedValue(connectError);
+
+    await expect(handler.connectRabbitMQ()).rejects.toThrow('broker unavailable');
+  });
+
+  it('calls amqp.connect exactly 5 times when all attempts fail', async () => {
+    (mockedAmqp.connect as jest.Mock).mockRejectedValue(new Error('refused'));
+
+    try {
+      await handler.connectRabbitMQ();
+    } catch {
+      // expected
+    }
+
+    expect(mockedAmqp.connect).toHaveBeenCalledTimes(5);
+  });
+
+  it('succeeds without retrying when first attempt works', async () => {
+    const mockConnection = {
+      createChannel: jest.fn().mockResolvedValue({
+        assertExchange: jest.fn().mockResolvedValue(undefined),
+        assertQueue: jest.fn().mockResolvedValue(undefined),
+        bindQueue: jest.fn().mockResolvedValue(undefined),
+        publish: jest.fn(),
+        close: jest.fn().mockResolvedValue(undefined),
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    (mockedAmqp.connect as jest.Mock).mockResolvedValueOnce(mockConnection);
+
+    await handler.connectRabbitMQ();
+
+    expect(mockedAmqp.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('succeeds on the third attempt after two failures', async () => {
+    const mockConnection = {
+      createChannel: jest.fn().mockResolvedValue({
+        assertExchange: jest.fn().mockResolvedValue(undefined),
+        assertQueue: jest.fn().mockResolvedValue(undefined),
+        bindQueue: jest.fn().mockResolvedValue(undefined),
+        publish: jest.fn(),
+        close: jest.fn().mockResolvedValue(undefined),
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const connectError = new Error('transient');
+    (mockedAmqp.connect as jest.Mock)
+      .mockRejectedValueOnce(connectError)
+      .mockRejectedValueOnce(connectError)
+      .mockResolvedValueOnce(mockConnection);
+
+    await handler.connectRabbitMQ();
+
+    expect(mockedAmqp.connect).toHaveBeenCalledTimes(3);
   });
 });

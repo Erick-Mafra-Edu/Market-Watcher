@@ -430,3 +430,96 @@ describe('NotifierService — communication contract tests', () => {
     });
   });
 });
+
+// =============================================================================
+// connectRabbitMQ — retry / reconnect behaviour
+// =============================================================================
+
+// amqplib must be mocked at the module level for the retry suite.
+// The rest of the file already hoisted 'pg'; we add 'amqplib' here.
+jest.mock('amqplib');
+
+import amqp from 'amqplib';
+
+const mockedAmqp = amqp as jest.Mocked<typeof amqp>;
+
+describe('NotifierService — connectRabbitMQ retry behaviour', () => {
+  let service: NotifierService;
+  let timeoutSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Make retry delays instant so tests don't wait 5 s each
+    timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((fn: any) => {
+      fn();
+      return 0 as any;
+    });
+    service = new NotifierService();
+  });
+
+  afterEach(async () => {
+    timeoutSpy.mockRestore();
+    await service.close();
+  });
+
+  it('throws after exhausting all 5 retry attempts', async () => {
+    const connectError = new Error('broker unavailable');
+    (mockedAmqp.connect as jest.Mock).mockRejectedValue(connectError);
+
+    await expect(service.connectRabbitMQ()).rejects.toThrow('broker unavailable');
+  });
+
+  it('calls amqp.connect exactly 5 times when all attempts fail', async () => {
+    (mockedAmqp.connect as jest.Mock).mockRejectedValue(new Error('refused'));
+
+    try {
+      await service.connectRabbitMQ();
+    } catch {
+      // expected
+    }
+
+    expect(mockedAmqp.connect).toHaveBeenCalledTimes(5);
+  });
+
+  it('succeeds without retrying when first attempt works', async () => {
+    const mockChannel = {
+      assertQueue: jest.fn().mockResolvedValue(undefined),
+      consume: jest.fn().mockResolvedValue(undefined),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const mockConnection = {
+      createChannel: jest.fn().mockResolvedValue(mockChannel),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    (mockedAmqp.connect as jest.Mock).mockResolvedValueOnce(mockConnection);
+
+    await service.connectRabbitMQ();
+
+    expect(mockedAmqp.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('succeeds on the third attempt after two failures', async () => {
+    const mockChannel = {
+      assertQueue: jest.fn().mockResolvedValue(undefined),
+      consume: jest.fn().mockResolvedValue(undefined),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const mockConnection = {
+      createChannel: jest.fn().mockResolvedValue(mockChannel),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const connectError = new Error('transient');
+    (mockedAmqp.connect as jest.Mock)
+      .mockRejectedValueOnce(connectError)
+      .mockRejectedValueOnce(connectError)
+      .mockResolvedValueOnce(mockConnection);
+
+    await service.connectRabbitMQ();
+
+    expect(mockedAmqp.connect).toHaveBeenCalledTimes(3);
+  });
+});

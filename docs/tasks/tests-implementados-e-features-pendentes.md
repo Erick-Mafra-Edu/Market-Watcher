@@ -102,58 +102,145 @@ Valida as rotas de proxy que encaminham requisições de dados de ações do `we
 
 ---
 
-### Totais por serviço
+### 1.5 Retry/Reconnect do RabbitMQ (P1)
 
-| Serviço | Testes antes | Novos testes | Total atual |
+#### `api-handler/src/index.communication.test.ts` — 4 novos testes (total: 12) ✅
+Valida o comportamento de retry/reconnect de `ApiHandler.connectRabbitMQ()`.
+
+| Grupo | O que valida |
+|---|---|
+| Falha total | Lança após 5 tentativas esgotadas |
+| Contagem exata | `amqp.connect` chamado exatamente 5 vezes em caso de falha total |
+| Sucesso imediato | Sem retry quando primeira tentativa funciona |
+| Sucesso tardio | Sucesso na terceira tentativa após duas falhas |
+
+---
+
+#### `notifier-service/src/index.communication.test.ts` — 4 novos testes (total: 26) ✅
+Mesma cobertura para `NotifierService.connectRabbitMQ()`.
+
+---
+
+#### `gnews-service/tests/test_rabbitmq_retry.py` — 8 testes ✅
+Valida retry/reconnect de `GNewsService.connect_rabbitmq()`.
+
+| Grupo | O que valida |
+|---|---|
+| Falha total | Lança após 5 tentativas com `ConnectionRefusedError` |
+| Contagem exata | `BlockingConnection` chamado exatamente 5 vezes |
+| Sleep entre tentativas | `sleep()` chamado 4 vezes (não após última tentativa) |
+| Erro preservado | Tipo e mensagem do erro original mantidos |
+| Sucesso imediato | Sem sleep quando primeira tentativa funciona |
+| Sucesso tardio | Sucesso na terceira tentativa, sleep chamado 2 vezes |
+| Channel atribuído | `self.channel` preenchido após conexão bem-sucedida |
+| Declares | `exchange_declare`, `queue_declare`, `queue_bind` chamados após connect |
+
+---
+
+#### `scraping-worker/tests/test_rabbitmq_retry.py` — 8 testes ✅
+Mesma cobertura para `StatusInvestScraper.connect_rabbitmq()`.
+
+---
+
+### 1.6 Fixture HTML versionada para regressão do parser StatusInvest
+
+#### `scraping-worker/tests/test_status_invest_html_fixture.py` — 24 testes ✅
+Valida o parser contra snapshots HTML versionados.
+
+| Fixture | O que valida |
+|---|---|
+| V1 indicator-card layout | Todos os 5 indicadores extraídos com valores exatos; `scraped_at` ISO; todos os campos obrigatórios presentes |
+| V2 noisy table layout | Indicadores extraídos de HTML com nav/header/aside/footer ao redor |
+| Empty fixture | Todos os indicadores são `None`; `scraped_at` sempre preenchido; símbolo preservado |
+
+---
+
+### 1.7 Idempotência de mensagens
+
+#### `notifier-service/src/integration/message-idempotency.integration.test.ts` — 11 testes ✅
+Valida que re-entrega da mesma mensagem não cria estado inconsistente.
+
+| Caminho | O que valida |
+|---|---|
+| `handleNews` duplicado | Não lança em segunda entrega; `ON CONFLICT` presente; dois INSERTs independentes emitidos |
+| Terceiro URL único | Não interfere nos anteriores |
+| `handleFundamentalsUpdate` duplicado | Não lança; dois INSERTs emitidos; `null` em re-entrega não quebra; símbolo normalizado consistentemente; dois símbolos distintos + re-entrega do primeiro funciona |
+
+---
+
+### 1.8 Integração alert chain (multi-canal + relevância de notícias)
+
+#### `notifier-service/src/integration/alert-chain.integration.test.ts` — 11 testes ✅
+
+| Grupo | O que valida |
+|---|---|
+| Recipient routing | `email`/`phone`/`whatsapp` presentes quando disponíveis; `phone`/`whatsapp` omitidos quando ausentes |
+| Email-only mode | `preferredProviders: ['SMTP']` e `fallbackEnabled: false` |
+| Multi-channel mode | Sem `preferredProviders`, `fallbackEnabled: true` |
+| Alerta salvo no banco | `INSERT INTO alerts` após envio bem-sucedido |
+| `hasRelevantNews()` | Retorna `false` com < 3 news; `true` com ≥ 3 |
+| `linkNewsToMentionedStocks` | `INSERT INTO stock_news` quando símbolo no título; ausente quando nenhum símbolo conhecido |
+| Relevance score | > 0.5 quando símbolo no título |
+| Sem alerta sem news | Não dispara quando preço muda mas news insuficientes |
+
+---
+
+### Totais por serviço (atualizado)
+
+| Serviço | Total iteração P0/P1 | Novos testes (esta iteração) | Total atual |
 |---|---|---|---|
-| `notifier-service` | 18 | +28 | **46** |
-| `api-handler` | 8 | +8 | **16** |
-| `web-app` | 21 | +10 | **31** |
-| `scraping-worker` | 5 | +12 | **17** |
-| `gnews-service` | 0 | +12 | **12** |
-| **Total** | **52** | **+70** | **122** |
+| `notifier-service` | 46 | +24 | **70** |
+| `api-handler` | 16 | +4 | **20** |
+| `web-app` | 31 | 0 | **31** |
+| `scraping-worker` | 17 | +32 | **49** |
+| `gnews-service` | 12 | +8 | **20** |
+| **Total** | **122** | **+68** | **190** |
 
 ---
 
 ## 2. Features Ainda Pendentes (sem cobertura completa)
 
-As features abaixo têm **testes implementados** para partes unitárias, mas **faltam implementação ou cobertura de integração E2E** para ser consideradas entregues.
+As features abaixo têm **testes implementados** para partes unitárias/integração, mas **faltam implementação de produto ou cobertura E2E live** para ser consideradas totalmente entregues.
 
 ### 2.1 Parser real de fundamentos StatusInvest (P0-A1)
 
-**Contexto:** O `scraping-worker` usa um extrator baseado em aliases e regex para parsear HTML do StatusInvest. Os testes unitários do parser (`test_status_invest_parser.py`) e os testes de contrato de payload (`test_rabbitmq_contract.py`) já cobrem a lógica de normalização e extração a partir de HTML sintético.
+**Contexto:** O `scraping-worker` usa um extrator baseado em aliases e regex para parsear HTML do StatusInvest. Os testes unitários do parser, os testes de contrato de payload e agora os **testes de fixture HTML versionada** cobrem a lógica de normalização e extração.
 
-**O que falta:**
-- Fixture de HTML real versionada do StatusInvest para teste de regressão por snapshot — garante que mudanças na estrutura da página não passem despercebidas.
-- Teste de integração E2E: `scraping-worker` scraping → publicação no RabbitMQ → consumo pelo `notifier-service` → persistência em `status_invest_data`.
+**O que foi implementado:**
+- `scraping-worker/tests/test_status_invest_html_fixture.py` — 24 testes de regressão por snapshot: fixture V1 (indicator-card layout), fixture V2 noisy (table layout com conteúdo ao redor) e fixture vazia (degradação graciosa).
 
-**Arquivo sugerido:** `scraping-worker/tests/test_status_invest_html_fixture.py`
+**O que ainda falta:**
+- Teste de integração E2E live: `scraping-worker` scraping → publicação no RabbitMQ → consumo pelo `notifier-service` → persistência em `status_invest_data` (requer infra Docker em execução).
 
 ---
 
 ### 2.2 Roteamento de canais SMS/WhatsApp no notifier (P0-B1/B2)
 
-**Contexto:** `AlertUser` já possui campos opcionais `phone` e `whatsapp`. A query de watchlist em `checkAlertConditions()` já seleciona `u.phone` e `u.whatsapp`. `sendAlert()` já mapeia esses campos para `MessageRecipient`. Os testes unitários em `index.future-features.test.ts` validam o mapeamento de recipient para os cenários email-only, email+phone e email+whatsapp.
+**O que foi implementado:**
+- `notifier-service/src/integration/alert-chain.integration.test.ts` — testes de integração do roteamento multi-canal:
+  - Recipient inclui `email`, `phone` e `whatsapp` quando disponíveis.
+  - `preferredProviders: ['SMTP']` passado quando `emailOnlyMode=true`.
+  - `fallbackEnabled: true` e sem `preferredProviders` quando modo `multi`.
+  - Alerta salvo no banco após envio bem-sucedido.
 
-**O que falta:**
-- Cobertura de regras de elegibilidade por canal em modo `multi` com dados reais no banco.
-- Fluxo E2E: fila → banco → envio real por provider (SMTP/Twilio/WhatsApp) com dados de contato reais.
-- Teste de integração: `MessagingManager.send()` recebe `phone`/`whatsapp` e aciona os providers corretos quando disponíveis.
-
-**Arquivo sugerido:** `notifier-service/src/integration/alert-chain.integration.test.ts`
+**O que ainda falta:**
+- Fluxo E2E com providers reais (SMTP/Twilio/WhatsApp) e dados de contato reais.
 
 ---
 
 ### 2.3 Relevância de notícias por símbolo no trigger de alerta (P1)
 
-**Contexto:** `hasRelevantNews()` atualmente verifica apenas se há atividade alta em tópicos genéricos de mercado (ex.: `"stock market"`, `"nasdaq"`). Não filtra notícias pelo símbolo específico do ativo monitorado.
+**O que foi implementado:**
+- `notifier-service/src/integration/alert-chain.integration.test.ts` — testes de relevância:
+  - `hasRelevantNews()` retorna `false` com < 3 news no tópico.
+  - `hasRelevantNews()` retorna `true` com ≥ 3 news no tópico.
+  - `linkNewsToMentionedStocks()` cria associação `stock_news` quando símbolo aparece no título.
+  - Nenhuma associação criada quando nenhum símbolo conhecido aparece no texto.
+  - `relevance_score` > 0.5 quando símbolo está no título.
+  - Alerta não disparado quando mudança de preço atinge threshold mas não há news suficientes.
 
-**O que falta:**
-- Implementação de filtragem de notícias por símbolo usando `stock_news` (tabela de associação já existente).
-- Testes unitários para a nova lógica de relevância por símbolo.
-- Testes de integração: fundamentos + preço + notícia relevante ao símbolo → alerta disparado; notícia irrelevante → alerta não disparado.
-
-**Arquivo sugerido:** `notifier-service/src/integration/alert-chain.integration.test.ts`
+**O que ainda falta:**
+- Implementação de filtragem por símbolo dentro do `hasRelevantNews()` para verificar `stock_news` (atualmente verifica tópicos genéricos). Os testes de integração já cobrem o caminho de associação existente.
 
 ---
 
@@ -180,31 +267,30 @@ As features abaixo têm **testes implementados** para partes unitárias, mas **f
 
 ---
 
-### 2.6 Idempotência de mensagens (P2)
+### 2.6 Idempotência de mensagens (P2) ✅ Testes implementados
 
-**Contexto:** Reentrega da mesma mensagem (ex.: requeue acidental) pode criar registros duplicados.
-
-**O que falta:**
-- Validação de que mensagens duplicadas não criam estado inconsistente no banco.
-- Testes explícitos de idempotência para `news_articles` (já tem `ON CONFLICT`) e `status_invest_data`.
-
-**Arquivo sugerido:** `notifier-service/src/integration/message-idempotency.integration.test.ts`
+**O que foi implementado:**
+- `notifier-service/src/integration/message-idempotency.integration.test.ts` — 11 testes:
+  - Segunda entrega do mesmo URL de notícia não lança exceção.
+  - `ON CONFLICT` presente no INSERT de `news_articles`.
+  - Cada entrega emite exatamente um INSERT independente (o banco resolve o conflito).
+  - Segunda entrega de fundamentais para o mesmo símbolo não lança exceção.
+  - Indicadores `null` em re-entrega não causam erro.
+  - Símbolo normalizado para maiúsculas em re-entregas consecutivas.
 
 ---
 
-### 2.7 Retry/Reconnect do RabbitMQ (P1)
+### 2.7 Retry/Reconnect do RabbitMQ (P1) ✅ Testes implementados
 
-**Contexto:** Os serviços implementam lógica de reconexão com retry (`max_retries = 5`), mas esse comportamento não tem cobertura de teste.
-
-**O que falta:**
-- Testes que simulam falha de conexão e verificam que a reconexão é tentada o número correto de vezes.
-- Verificação de que após esgotar retries o erro é propagado corretamente.
-
-**Arquivos sugeridos:**
-- `api-handler/src/index.communication.test.ts` (estender)
-- `notifier-service/src/index.communication.test.ts` (estender)
-- `gnews-service/tests/test_rabbitmq_retry.py`
-- `scraping-worker/tests/test_rabbitmq_retry.py`
+**O que foi implementado:**
+- `api-handler/src/index.communication.test.ts` (estendido) — 4 novos testes:
+  - Lança após 5 tentativas esgotadas.
+  - `amqp.connect` chamado exatamente 5 vezes em caso de falha total.
+  - Sucesso na primeira tentativa sem retry.
+  - Sucesso na terceira tentativa após duas falhas.
+- `notifier-service/src/index.communication.test.ts` (estendido) — 4 novos testes (mesma cobertura).
+- `gnews-service/tests/test_rabbitmq_retry.py` — 8 novos testes (Python).
+- `scraping-worker/tests/test_rabbitmq_retry.py` — 8 novos testes (Python).
 
 ---
 
@@ -214,10 +300,11 @@ As features abaixo têm **testes implementados** para partes unitárias, mas **f
 - [x] Testes de contrato consumer-side + ack/nack para as três filas do `notifier-service`
 - [x] Testes de integração mensagem → persistência no banco (`news_articles`, `status_invest_data`)
 - [x] Testes de contrato HTTP proxy `web-app` → `api-handler`
-- [ ] Fixture HTML real versionada para regressão do parser StatusInvest
-- [ ] Fluxo E2E de notificação multi-canal validado com dados reais de contato
-- [ ] Relevância de notícias por símbolo implementada e testada
+- [x] Fixture HTML versionada para regressão do parser StatusInvest (`scraping-worker/tests/test_status_invest_html_fixture.py`)
+- [x] Testes de idempotência de mensagens (`notifier-service/src/integration/message-idempotency.integration.test.ts`)
+- [x] Testes de retry/reconnect RabbitMQ (todos os 4 serviços)
+- [x] Testes de integração do roteamento multi-canal + relevância de notícias por símbolo (`notifier-service/src/integration/alert-chain.integration.test.ts`)
+- [ ] Fluxo E2E de notificação multi-canal validado com providers reais (SMTP/Twilio/WhatsApp)
+- [ ] Relevância de notícias por símbolo implementada dentro de `hasRelevantNews()` usando `stock_news`
 - [ ] Top Movers implementado e testado
 - [ ] WebSocket para atualizações em tempo real
-- [ ] Testes de idempotência de mensagens
-- [ ] Testes de retry/reconnect RabbitMQ
