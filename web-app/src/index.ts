@@ -3,6 +3,7 @@
  * User registration, authentication, and watchlist management
  */
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { Pool } from 'pg';
 import axios from 'axios';
@@ -41,16 +42,26 @@ if (trustProxySetting === 'true' || trustProxySetting === '1') {
 app.use(express.json());
 app.use(express.static('public'));
 
+// CORS configuration - allow all origins for public endpoints
+app.use(cors({
+  origin: ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+  credentials: true,
+}));
+
 // Swagger UI documentation
 app.use('/api/docs', swaggerUi.serve);
 app.get('/api/docs', swaggerUi.setup(swaggerSpecs, {
   swaggerOptions: {
-    url: '/openapi.json',
+    url: 'http://localhost:3000/openapi.json',
   },
+  customCss: '.swagger-ui { background-color: #fafafa; }',
 }));
 
-// OpenAPI specification endpoint
+// OpenAPI specification endpoint (without auth for documentation)
 app.get('/openapi.json', (req: Request, res: Response) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
   res.json(swaggerSpecs);
 });
