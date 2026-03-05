@@ -6,6 +6,7 @@ import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { Pool } from 'pg';
 import axios from 'axios';
+import swaggerUi from 'swagger-ui-express';
 import { AuthController } from './controllers/auth.controller';
 import { WatchlistController } from './controllers/watchlist.controller';
 import { AlertsController } from './controllers/alerts.controller';
@@ -13,6 +14,7 @@ import { NewsController } from './controllers/news.controller';
 import { PortfolioController } from './controllers/portfolio.controller';
 import { AssetsController } from './controllers/assets.controller';
 import { authMiddleware } from './middleware/auth.middleware';
+import swaggerSpecs, { generateOpenAPIFile } from './swagger';
 
 const app = express();
 const PORT = 3000;
@@ -38,6 +40,20 @@ if (trustProxySetting === 'true' || trustProxySetting === '1') {
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
+
+// Swagger UI documentation
+app.use('/api/docs', swaggerUi.serve);
+app.get('/api/docs', swaggerUi.setup(swaggerSpecs, {
+  swaggerOptions: {
+    url: '/openapi.json',
+  },
+}));
+
+// OpenAPI specification endpoint
+app.get('/openapi.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json(swaggerSpecs);
+});
 
 // Rate limiting
 const authLimiter = rateLimit({
@@ -179,8 +195,13 @@ const startServer = async () => {
     await pool.query('SELECT NOW()');
     console.log('Database connection successful');
 
+    // Generate OpenAPI specification file
+    generateOpenAPIFile();
+
     app.listen(PORT, () => {
       console.log(`Web App listening on port ${PORT}`);
+      console.log(`📚 Swagger UI available at http://localhost:${PORT}/api/docs`);
+      console.log(`📄 OpenAPI spec available at http://localhost:${PORT}/openapi.json`);
     });
   } catch (error) {
     console.error('Failed to start Web App:', error);
