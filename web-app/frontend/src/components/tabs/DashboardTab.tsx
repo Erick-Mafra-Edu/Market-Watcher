@@ -360,8 +360,37 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
     return <div className="card">Carregando dashboard...</div>;
   }
 
+  const profitDirectionClass = state.totalProfitLoss >= 0 ? 'profit' : 'loss';
+  const topMover = state.positions.reduce<PortfolioPosition | null>((best, current) => {
+    if (!best) return current;
+    const currentVariation = Math.abs(Number(current.dailyChange ?? current.profitLossPercent ?? 0));
+    const bestVariation = Math.abs(Number(best.dailyChange ?? best.profitLossPercent ?? 0));
+    return currentVariation > bestVariation ? current : best;
+  }, null);
+
+  const topMoverVariation = topMover ? Number(topMover.dailyChange ?? topMover.profitLossPercent ?? 0) : 0;
+
   return (
     <section className="stack-lg">
+      <article className="card dashboard-hero">
+        <div className="stack-xs">
+          <p className="eyebrow">Resumo do dia</p>
+          <h3>Painel de monitoramento</h3>
+          <p className="muted tiny">
+            Acompanhe performance da carteira, eventos de mercado e sinais rapidos de variacao em um unico bloco.
+          </p>
+        </div>
+        <div className="dashboard-hero-pills">
+          <span className="badge">Noticias: {state.news.length}</span>
+          <span className="badge">Ativos: {state.positions.length}</span>
+          {topMover && (
+            <span className={`badge ${topMoverVariation >= 0 ? 'trend-positive' : 'trend-negative'}`}>
+              Maior movimento: {topMover.symbol} ({topMoverVariation >= 0 ? '+' : ''}{topMoverVariation.toFixed(2)}%)
+            </span>
+          )}
+        </div>
+      </article>
+
       <div className="card form-grid-4">
         <label className="field stack-xs">
           <span className="tiny muted">Carteira / Moeda de exibicao</span>
@@ -383,21 +412,27 @@ export function DashboardTab({ token, onError }: DashboardTabProps) {
       </div>
 
       <div className="stats-grid">
-        <article className="stat-card">
-          <span>Valor Atual</span>
+        <article className="stat-card metric-tile">
+          <span className="tiny">Valor Atual</span>
           <strong>{formatMoney(state.totalCurrent, walletCurrency)}</strong>
+          <p className="muted tiny">Consolidado dos ativos em carteira.</p>
         </article>
-        <article className="stat-card">
-          <span>Lucro/Prejuizo</span>
-          <strong>{formatMoney(state.totalProfitLoss, walletCurrency)}</strong>
+        <article className="stat-card metric-tile">
+          <span className="tiny">Lucro/Prejuizo</span>
+          <strong className={profitDirectionClass}>{formatMoney(state.totalProfitLoss, walletCurrency)}</strong>
+          <p className={`tiny ${profitDirectionClass}`}>
+            {state.totalProfitLoss >= 0 ? 'Carteira em valorizacao.' : 'Carteira em correcao no periodo.'}
+          </p>
         </article>
-        <article className="stat-card">
-          <span>Watchlist</span>
+        <article className="stat-card metric-tile">
+          <span className="tiny">Watchlist</span>
           <strong>{state.watchlistCount}</strong>
+          <p className="muted tiny">Ativos em observacao ativa.</p>
         </article>
-        <article className="stat-card">
-          <span>Alertas Nao Lidos</span>
+        <article className="stat-card metric-tile">
+          <span className="tiny">Alertas Nao Lidos</span>
           <strong>{state.unreadAlerts}</strong>
+          <p className="muted tiny">Priorize leitura para evitar sinais perdidos.</p>
         </article>
       </div>
 

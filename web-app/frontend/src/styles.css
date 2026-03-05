@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --bg-base: #071123;
   --bg-soft: #0f1d32;
@@ -365,6 +369,39 @@ select {
   gap: 12px;
 }
 
+.dashboard-hero {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(135deg, rgba(20, 47, 80, 0.94), rgba(10, 26, 48, 0.78)),
+    radial-gradient(circle at 12% 30%, rgba(54, 200, 255, 0.26), transparent 42%);
+}
+
+.dashboard-hero-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.metric-tile {
+  border: 1px solid rgba(167, 197, 244, 0.4);
+  min-height: 132px;
+}
+
+.metric-tile strong.profit,
+.metric-tile .profit {
+  color: #b9ffe1;
+}
+
+.metric-tile strong.loss,
+.metric-tile .loss {
+  color: #ffd0d0;
+}
+
 .dashboard-main-chart {
   grid-column: 1 / -1;
 }
@@ -550,5 +587,14 @@ button:disabled {
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-hero-pills {
+    justify-content: flex-start;
   }
 }

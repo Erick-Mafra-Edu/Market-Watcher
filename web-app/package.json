@@ -5,13 +5,13 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "npm run build:css && npm run build:server && npm run build:client",
-    "build:css": "tailwindcss -i frontend/src/input.css -o public/assets/app.css --minify",
+    "build:css": "tailwindcss -i frontend/src/styles.css -o public/assets/app.css --minify",
     "build:server": "tsc",
     "build:client": "esbuild frontend/src/main.tsx --bundle --platform=browser --format=iife --jsx=automatic --outfile=public/assets/app.js --sourcemap --minify",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "dev:client": "esbuild frontend/src/main.tsx --bundle --platform=browser --format=iife --jsx=automatic --outfile=public/assets/app.js --sourcemap --watch",
-    "dev:css": "tailwindcss -i frontend/src/input.css -o public/assets/app.css --watch",
+    "dev:css": "tailwindcss -i frontend/src/styles.css -o public/assets/app.css --watch",
     "test": "jest",
     "test:watch": "jest --watch"
   },
