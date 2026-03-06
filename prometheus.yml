@@ -1,0 +1,40 @@
+# Prometheus Configuration for Market Watcher
+# Scrapes metrics from all services
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'market-watcher'
+    environment: 'development'
+
+scrape_configs:
+  - job_name: 'web-app'
+    static_configs:
+      - targets: ['web-app:3000']
+        labels:
+          service: 'web-app'
+
+  - job_name: 'api-handler'
+    static_configs:
+      - targets: ['api-handler:3001']
+        labels:
+          service: 'api-handler'
+
+  - job_name: 'notifier-service'
+    static_configs:
+      - targets: ['notifier-service:3002']
+        labels:
+          service: 'notifier-service'
+
+  - job_name: 'gnews-service'
+    static_configs:
+      - targets: ['gnews-service:8000']
+        labels:
+          service: 'gnews-service'
+
+  - job_name: 'scraping-worker'
+    static_configs:
+      - targets: ['scraping-worker:8001']
+        labels:
+          service: 'scraping-worker'

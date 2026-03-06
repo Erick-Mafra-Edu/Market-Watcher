@@ -68,6 +68,8 @@ services:
       DATABASE_USER: ${POSTGRES_USER:-postgres}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       ASSET_REFRESH_INTERVAL: ${ASSET_REFRESH_INTERVAL:-1800}
+    ports:
+      - "8000:8000"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -118,6 +120,8 @@ services:
       RABBITMQ_PASS: ${RABBITMQ_PASS:-admin}
       CHECK_INTERVAL: ${SCRAPER_CHECK_INTERVAL:-300}
       BRAPI_TOKEN: ${BRAPI_TOKEN:-hDMfQ6HLaw4EFWCWCRccpX}
+    ports:
+      - "8001:8001"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -157,6 +161,8 @@ services:
       WHATSAPP_API_URL: ${WHATSAPP_API_URL}
       WHATSAPP_API_KEY: ${WHATSAPP_API_KEY}
       WHATSAPP_INSTANCE_ID: ${WHATSAPP_INSTANCE_ID}
+    ports:
+      - "3002:3002"
     depends_on:
       database:
         condition: service_healthy
@@ -200,9 +206,28 @@ services:
       - market-watcher-network
     restart: unless-stopped
 
+  # Prometheus - Metrics and Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: market-watcher-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - market-watcher-network
+    restart: unless-stopped
+
 networks:
   market-watcher-network:
     driver: bridge
 
 volumes:
   postgres_data:
+  prometheus_data:

@@ -12,6 +12,16 @@ from typing import Dict, List, Optional
 import requests
 from bs4 import BeautifulSoup
 import pika
+from prometheus_client import start_http_server
+from metrics import (
+    registry,
+    scraping_requests,
+    dividends_found,
+    fundamental_data_scraped,
+    scraping_duration,
+    scraping_errors,
+    status_invest_requests,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -111,12 +121,14 @@ class StatusInvestScraper:
     
     def scrape_stock(self, symbol: str) -> Optional[Dict]:
         """Scrape fundamental data for a stock from StatusInvest"""
+        start_time = time.time()
         try:
             url = f"{self.BASE_URL}/{symbol.lower()}"
             logger.info(f"Scraping data for {symbol} from {url}")
             
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
+            status_invest_requests.labels(status='success').inc()
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -133,10 +145,17 @@ class StatusInvestScraper:
                 'scraped_at': datetime.now(timezone.utc).isoformat()
             }
             
+            duration = time.time() - start_time
+            scraping_duration.labels(symbol=symbol).observe(duration)
+            scraping_requests.labels(status='success').inc()
+            fundamental_data_scraped.labels(symbol=symbol, status='success').inc()
             logger.info(f"Successfully scraped data for {symbol}")
             return data
             
         except requests.RequestException as e:
+            status_invest_requests.labels(status='failure').inc()
+            scraping_requests.labels(status='failure').inc()
+            scraping_errors.labels(error_type='request_error').inc()
             logger.error(f"Error scraping {symbol}: {e}")
             return None
         except Exception as e:
@@ -577,15 +596,19 @@ class StatusInvestScraper:
             events = self._extract_dividend_events(soup, symbol)
 
             if events:
+                # Track dividends found - THIS IS THE KEY METRIC!
+                dividends_found.labels(symbol=symbol).inc(len(events))
                 logger.info(f"Extracted {len(events)} dividend events for {symbol}")
             else:
                 logger.info(f"No dividend events found for {symbol}")
 
             return events
         except requests.RequestException as e:
+            scraping_errors.labels(error_type='dividend_request_error').inc()
             logger.error(f"Error scraping dividend events for {symbol}: {e}")
             return []
         except Exception as e:
+            scraping_errors.labels(error_type='dividend_parse_error').inc()
             logger.error(f"Unexpected error scraping dividend events for {symbol}: {e}")
             return []
     
@@ -677,6 +700,10 @@ class StatusInvestScraper:
         logger.info("HTTP session closed")
 
 if __name__ == '__main__':
+    # Start Prometheus metrics server on port 8001
+    start_http_server(8001, registry=registry)
+    logger.info("Prometheus metrics server started on port 8001")
+    
     scraper = StatusInvestScraper()
     try:
         scraper.run()

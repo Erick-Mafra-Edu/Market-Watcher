@@ -14,8 +14,10 @@ import { AlertsController } from './controllers/alerts.controller';
 import { NewsController } from './controllers/news.controller';
 import { PortfolioController } from './controllers/portfolio.controller';
 import { AssetsController } from './controllers/assets.controller';
+import { StatsController } from './controllers/stats.controller';
 import { authMiddleware } from './middleware/auth.middleware';
 import swaggerSpecs, { generateOpenAPIFile } from './swagger';
+import { register, httpRequestDuration, httpRequestTotal } from './metrics';
 
 const app = express();
 const PORT = 3000;
@@ -117,10 +119,32 @@ const alertsController = new AlertsController(pool);
 const newsController = new NewsController(pool);
 const portfolioController = new PortfolioController(pool);
 const assetsController = new AssetsController(pool);
+const statsController = new StatsController(pool);
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'web-app' });
+});
+
+// Prometheus metrics endpoint
+app.get('/metrics', async (req: Request, res: Response) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+
+// Metrics middleware - track HTTP requests
+app.use((req: Request, res: Response, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route?.path || req.path;
+    httpRequestDuration.observe(
+      { method: req.method, route, status_code: res.statusCode.toString() },
+      duration
+    );
+    httpRequestTotal.inc({ method: req.method, route, status_code: res.statusCode.toString() });
+  });
+  next();
 });
 
 // Authentication routes (rate limited)
@@ -192,6 +216,11 @@ app.get('/api/portfolio/performance', authMiddleware, apiLimiter, (req, res) =>
 );
 app.get('/api/portfolio/dividends', authMiddleware, apiLimiter, (req, res) =>
   portfolioController.getDividends(req, res)
+);
+
+// Stats route (protected and rate limited)
+app.get('/api/stats', authMiddleware, apiLimiter, (req, res) =>
+  statsController.getStats(req, res)
 );
 
 // Stock data proxy (to api-handler) - protected and rate limited

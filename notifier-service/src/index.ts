@@ -14,6 +14,8 @@ import {
   MessageRecipient,
 } from './messaging';
 import { SentimentAnalyzer } from './sentiment.service';
+import express from 'express';
+import { register } from './metrics';
 
 // Configuration
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
@@ -775,6 +777,19 @@ Market Watcher - Automated Alert
       
       // Setup queues and consumers
       await this.setupQueues();
+
+      // Start HTTP server for metrics
+      const app = express();
+      app.get('/health', (req, res) => {
+        res.json({ status: 'ok', service: 'notifier-service' });
+      });
+      app.get('/metrics', async (req, res) => {
+        res.set('Content-Type', register.contentType);
+        res.end(await register.metrics());
+      });
+      app.listen(3002, () => {
+        console.log('Metrics endpoint available at http://localhost:3002/metrics');
+      });
       
       console.log('Notifier Service started successfully');
     } catch (error) {

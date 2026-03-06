@@ -9,6 +9,7 @@ import { Pool } from 'pg';
 import { StockProvider } from './providers/StockProvider';
 import { BrapiProvider } from './providers/BrapiProvider';
 import { YahooFinanceProvider } from './providers/YahooFinanceProvider';
+import { register } from './metrics';
 
 // Configuration
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
@@ -65,6 +66,11 @@ export class ApiHandler {
   private setupRoutes(): void {
     this.app.get('/health', (req, res) => {
       res.json({ status: 'ok', service: 'api-handler' });
+    });
+
+    this.app.get('/metrics', async (req, res) => {
+      res.set('Content-Type', register.contentType);
+      res.end(await register.metrics());
     });
 
     // Endpoint to get stock quote

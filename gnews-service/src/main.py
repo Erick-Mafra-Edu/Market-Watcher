@@ -11,6 +11,14 @@ import logging
 from datetime import datetime
 from gnews import GNews
 import pika
+from prometheus_client import start_http_server
+from metrics import (
+    registry,
+    news_articles_fetched,
+    news_articles_published,
+    news_fetch_duration,
+    news_api_errors,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -203,10 +211,16 @@ class GNewsService:
         """Fetch news for a specific topic"""
         try:
             logger.info(f"Fetching news for topic: {topic}")
+            start_time = time.time()
             articles = self.gnews.get_news(topic)
+            duration = time.time() - start_time
+            news_fetch_duration.observe(duration)
+            news_articles_fetched.labels(status='success').inc(len(articles))
             return articles
         except Exception as e:
             logger.error(f"Error fetching news for {topic}: {e}")
+            news_articles_fetched.labels(status='failure').inc()
+            news_api_errors.labels(error_type=type(e).__name__).inc()
             return []
 
     def publish_news(self, news_data):
@@ -222,6 +236,7 @@ class GNewsService:
                     content_type='application/json'
                 )
             )
+            news_articles_published.inc()
             logger.info(f"Published news: {news_data.get('title', 'N/A')}")
         except Exception as e:
             logger.error(f"Error publishing news: {e}")
@@ -299,6 +314,10 @@ class GNewsService:
             logger.info("RabbitMQ connection closed")
 
 if __name__ == '__main__':
+    # Start Prometheus metrics server on port 8000
+    start_http_server(8000, registry=registry)
+    logger.info("Prometheus metrics server started on port 8000")
+    
     service = GNewsService()
     try:
         service.run()
