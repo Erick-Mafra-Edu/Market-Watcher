@@ -596,11 +596,9 @@ class StatusInvestScraper:
             events = self._extract_dividend_events(soup, symbol)
 
             if events:
-                # Track dividends found - THIS IS THE KEY METRIC!
-                dividends_found.labels(symbol=symbol).inc(len(events))
-                logger.info(f"Extracted {len(events)} dividend events for {symbol}")
+                logger.info(f"Extracted {len(events)} dividend events for {symbol} from StatusInvest")
             else:
-                logger.info(f"No dividend events found for {symbol}")
+                logger.info(f"No dividend events found for {symbol} from StatusInvest")
 
             return events
         except requests.RequestException as e:
@@ -676,6 +674,11 @@ class StatusInvestScraper:
                         brapi_dividend_events,
                         yahoo_dividend_events,
                     )
+                    
+                    # Track dividends found from all sources (StatusInvest + BRAPI + Yahoo)
+                    if merged_dividend_events:
+                        dividends_found.labels(symbol=symbol).inc(len(merged_dividend_events))
+                    
                     self.publish_dividend_events(merged_dividend_events)
                     
                     # Delay between requests to avoid rate limiting
